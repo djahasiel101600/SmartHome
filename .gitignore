@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.env
+!.env.example
+db.sqlite3
+venv/
+.venv/
+
+# Node
+node_modules/
+dist/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Arduino/PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
