@@ -10,6 +10,10 @@ class RelaySerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "relay_number", "state", "created_at")
 
 
+class RelayCreateSerializer(serializers.Serializer):
+    label = serializers.CharField(max_length=50, default="Relay")
+
+
 class RelayToggleSerializer(serializers.Serializer):
     state = serializers.BooleanField()
 

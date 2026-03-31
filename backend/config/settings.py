@@ -138,3 +138,9 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_BEAT_SCHEDULE = {
+    "check-recurring-schedules-every-minute": {
+        "task": "apps.schedules.tasks.check_recurring_schedules",
+        "schedule": 60.0,  # every 60 seconds
+    },
+}

@@ -6,4 +6,5 @@ export const deviceApi = {
   getById: (id: number) => api.get<Device>(`/api/devices/${id}/`),
   create: (name: string) => api.post<Device>("/api/devices/", { name }),
   update: (id: number, name: string) => api.patch<Device>(`/api/devices/${id}/`, { name }),
+  delete: (id: number) => api.delete(`/api/devices/${id}/`),
 };

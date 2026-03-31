@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Button, Badge } from "@/shared/ui";
 import { useAuthStore } from "@/features/auth";
 import { useDeviceStore } from "@/entities/device";
-import { Home, Calendar, Settings, LogOut, Wifi, WifiOff } from "lucide-react";
+import { Home, Cpu, Calendar, Settings, LogOut, Wifi, WifiOff } from "lucide-react";
 import { cn } from "@/shared/lib";
 
 interface HeaderProps {
@@ -16,6 +16,7 @@ export function Header({ wsConnected }: HeaderProps) {
 
   const navLinks = [
     { href: "/", label: "Dashboard", icon: Home },
+    { href: "/devices", label: "Devices", icon: Cpu },
     { href: "/schedules", label: "Schedules", icon: Calendar },
     { href: "/settings", label: "Settings", icon: Settings },
   ];

@@ -1,12 +1,13 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import models
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Device, Relay
-from .serializers import DeviceSerializer, RelaySerializer, RelayToggleSerializer
+from .serializers import DeviceSerializer, RelayCreateSerializer, RelaySerializer, RelayToggleSerializer
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
@@ -27,9 +28,42 @@ class DeviceRelayListView(generics.ListAPIView):
         return Relay.objects.filter(device_id=self.kwargs["device_id"])
 
 
+class DeviceRelayCreateView(APIView):
+    """Add a new relay to a device."""
+
+    def post(self, request, device_id):
+        try:
+            device = Device.objects.get(pk=device_id)
+        except Device.DoesNotExist:
+            return Response({"detail": "Device not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = RelayCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Determine next relay number
+        max_num = device.relays.aggregate(m=models.Max("relay_number"))["m"] or 0
+        next_num = max_num + 1
+
+        label = serializer.validated_data.get("label", f"Relay {next_num}")
+        relay = Relay.objects.create(device=device, relay_number=next_num, label=label)
+        return Response(RelaySerializer(relay).data, status=status.HTTP_201_CREATED)
+
+
 class RelayDetailView(generics.RetrieveUpdateAPIView):
     queryset = Relay.objects.all()
     serializer_class = RelaySerializer
+
+
+class RelayDeleteView(APIView):
+    """Delete a relay."""
+
+    def delete(self, request, pk):
+        try:
+            relay = Relay.objects.get(pk=pk)
+        except Relay.DoesNotExist:
+            return Response({"detail": "Relay not found."}, status=status.HTTP_404_NOT_FOUND)
+        relay.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RelayToggleView(APIView):

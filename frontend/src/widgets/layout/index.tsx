@@ -4,6 +4,7 @@ import { useDeviceStore } from "@/entities/device";
 import { useWebSocket } from "@/app/providers/websocket-provider";
 import {
   LayoutDashboard,
+  Cpu,
   Calendar,
   Settings,
   LogOut,
@@ -17,6 +18,7 @@ import { Badge } from "@/shared/ui";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/devices", label: "Devices", icon: Cpu },
   { href: "/schedules", label: "Schedules", icon: Calendar },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

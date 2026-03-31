@@ -3,6 +3,7 @@ import { AuthProvider } from "@/app/providers";
 import { AppLayout } from "@/widgets/layout";
 import { LoginPage } from "@/pages/login";
 import { DashboardPage } from "@/pages/dashboard";
+import { DevicesPage } from "@/pages/devices";
 import { SchedulesPage } from "@/pages/schedules";
 import { SettingsPage } from "@/pages/settings";
 
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
           {
             path: "/",
             element: <DashboardPage />,
+          },
+          {
+            path: "/devices",
+            element: <DevicesPage />,
           },
           {
             path: "/schedules",
