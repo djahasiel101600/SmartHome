@@ -18,17 +18,3 @@ if sys.platform == "win32":
     app.conf.worker_pool = "solo"
 
 app.autodiscover_tasks()
-
-
-@app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
-    """Register periodic tasks after Celery is fully initialized.
-
-    Ensures check_recurring_schedules runs every 60 seconds so that
-    recurring Schedule entries actually trigger relay actions.
-    """
-    sender.add_periodic_task(
-        60.0,
-        sender.signature("apps.schedules.tasks.check_recurring_schedules"),
-        name="check-recurring-schedules-every-minute",
-    )

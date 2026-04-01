@@ -79,7 +79,7 @@ def check_recurring_schedules():
 
     from .models import RecurringSchedule
 
-    now = timezone.now()
+    now = timezone.localtime(timezone.now())
     current_time = now.time().replace(second=0, microsecond=0)
     current_day = now.weekday()  # 0=Monday, 6=Sunday
 

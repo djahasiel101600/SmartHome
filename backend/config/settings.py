@@ -6,6 +6,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -78,6 +79,18 @@ DATABASES = {
     }
 }
 
+
+def enable_wal_mode(sender, connection, **kwargs):
+    """Enable WAL mode for SQLite to improve concurrent access across containers."""
+    if connection.vendor == "sqlite":
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL;")
+
+
+from django.db.backends.signals import connection_created  # noqa: E402
+
+connection_created.connect(enable_wal_mode)
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -86,7 +99,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Manila"
 USE_I18N = True
 USE_TZ = True
 
@@ -136,11 +149,11 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:63
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "UTC"
+CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_BEAT_SCHEDULE = {
     "check-recurring-schedules-every-minute": {
         "task": "apps.schedules.tasks.check_recurring_schedules",
-        "schedule": 60.0,  # every 60 seconds
+        "schedule": crontab(minute="*"),  # every minute, on the minute
     },
 }
