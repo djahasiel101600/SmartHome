@@ -8,6 +8,7 @@ from django.utils import timezone
 from apps.devices.models import Device, Relay
 
 from .models import SensorReading
+from .services import check_thresholds
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,14 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
             },
         )
 
+        # Check thresholds and dispatch insight generation
+        if check_thresholds(temperature, humidity):
+            from .tasks import generate_sensor_insight
+
+            generate_sensor_insight.delay(
+                str(self.device_id), temperature, humidity
+            )
+
     async def _handle_relay_state(self, data):
         relay_number = data.get("relay")
         state = data.get("state")
@@ -201,5 +210,12 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
         """Broadcast device online/offline status to dashboard clients."""
         await self.send_json({
             "type": "device_status",
+            "data": event["data"],
+        })
+
+    async def insight_update(self, event):
+        """Broadcast AI-generated sensor insight to dashboard clients."""
+        await self.send_json({
+            "type": "insight_update",
             "data": event["data"],
         })

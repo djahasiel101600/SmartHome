@@ -32,6 +32,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const updateRelayState = useRelayStore((s) => s.updateRelayState);
   const addReading = useSensorStore((s) => s.addReading);
+  const setInsight = useSensorStore((s) => s.setInsight);
   const updateDeviceStatus = useDeviceStore((s) => s.updateDeviceStatus);
 
   const connect = useCallback(() => {
@@ -67,6 +68,17 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           case "device_status":
             updateDeviceStatus(message.data.device_id, message.data.is_online);
             break;
+          case "insight_update":
+            setInsight({
+              id: message.data.id,
+              device: 0,
+              insight_text: message.data.insight_text,
+              severity: message.data.severity,
+              temperature: message.data.temperature,
+              humidity: message.data.humidity,
+              created_at: message.data.created_at,
+            });
+            break;
         }
       } catch {
         // Ignore malformed messages
@@ -84,7 +96,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     ws.onerror = () => {
       ws.close();
     };
-  }, [updateRelayState, addReading, updateDeviceStatus]);
+  }, [updateRelayState, addReading, setInsight, updateDeviceStatus]);
 
   useEffect(() => {
     connect();

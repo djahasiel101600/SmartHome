@@ -24,6 +24,16 @@ export interface SensorReading {
   recorded_at: string;
 }
 
+export interface SensorInsight {
+  id: number;
+  device: number;
+  insight_text: string;
+  temperature: number;
+  humidity: number;
+  severity: "info" | "warning" | "critical";
+  created_at: string;
+}
+
 export interface Schedule {
   id: number;
   relay: number;
@@ -91,4 +101,16 @@ export interface WsDeviceStatus {
   };
 }
 
-export type WsMessage = WsRelayUpdate | WsSensorUpdate | WsDeviceStatus;
+export interface WsInsightUpdate {
+  type: "insight_update";
+  data: {
+    id: number;
+    insight_text: string;
+    severity: "info" | "warning" | "critical";
+    temperature: number;
+    humidity: number;
+    created_at: string;
+  };
+}
+
+export type WsMessage = WsRelayUpdate | WsSensorUpdate | WsDeviceStatus | WsInsightUpdate;

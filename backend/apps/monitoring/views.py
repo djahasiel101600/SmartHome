@@ -5,8 +5,8 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SensorReading
-from .serializers import SensorReadingSerializer
+from .models import SensorInsight, SensorReading
+from .serializers import SensorInsightSerializer, SensorReadingSerializer
 
 RANGE_MAP = {
     "1h": timedelta(hours=1),
@@ -32,3 +32,11 @@ class SensorHistoryView(generics.ListAPIView):
         delta = RANGE_MAP.get(time_range, RANGE_MAP["24h"])
         since = timezone.now() - delta
         return SensorReading.objects.filter(recorded_at__gte=since)
+
+
+class SensorInsightLatestView(APIView):
+    def get(self, request):
+        insight = SensorInsight.objects.first()
+        if not insight:
+            return Response({"detail": "No insights available."}, status=404)
+        return Response(SensorInsightSerializer(insight).data)

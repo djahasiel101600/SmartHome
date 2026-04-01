@@ -157,3 +157,15 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute="*"),  # every minute, on the minute
     },
 }
+
+# OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+SENSOR_COMFORT_THRESHOLDS = {
+    "temp_min": 18,
+    "temp_max": 26,
+    "humidity_min": 30,
+    "humidity_max": 60,
+}
+
+INSIGHT_CACHE_MINUTES = 30

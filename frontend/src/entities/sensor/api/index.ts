@@ -1,5 +1,5 @@
 import { api } from "@/shared/api";
-import type { SensorReading } from "@/shared/types";
+import type { SensorInsight, SensorReading } from "@/shared/types";
 
 interface PaginatedResponse<T> {
   count: number;
@@ -14,4 +14,5 @@ export const sensorApi = {
     api.get<PaginatedResponse<SensorReading>>("/api/sensors/history/", {
       params: { range },
     }),
+  getLatestInsight: () => api.get<SensorInsight>("/api/sensors/insights/latest/"),
 };
