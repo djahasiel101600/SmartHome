@@ -18,3 +18,16 @@ class ScheduleAdmin(admin.ModelAdmin):
     list_display = ("relay", "schedule_type", "is_active", "created_at")
     list_filter = ("schedule_type", "is_active")
     inlines = [TimerInline, RecurringInline]
+
+
+@admin.register(TimerSchedule)
+class TimerScheduleAdmin(admin.ModelAdmin):
+    list_display = ("schedule", "duration_minutes", "action", "started_at", "expires_at")
+    list_filter = ("action",)
+    readonly_fields = ("started_at",)
+
+
+@admin.register(RecurringSchedule)
+class RecurringScheduleAdmin(admin.ModelAdmin):
+    list_display = ("schedule", "time", "days_of_week", "action")
+    list_filter = ("action",)
