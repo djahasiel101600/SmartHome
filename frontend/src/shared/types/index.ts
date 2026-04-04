@@ -34,6 +34,34 @@ export interface SensorInsight {
   created_at: string;
 }
 
+export interface SensorAggregate {
+  id: number;
+  device: number;
+  period_type: "hourly" | "daily";
+  period_start: string;
+  temp_min: number;
+  temp_max: number;
+  temp_avg: number;
+  humidity_min: number;
+  humidity_max: number;
+  humidity_avg: number;
+  reading_count: number;
+}
+
+export interface SensorStats {
+  temp_min: number;
+  temp_max: number;
+  temp_avg: number;
+  humidity_min: number;
+  humidity_max: number;
+  humidity_avg: number;
+  peak_temp_at: string | null;
+  peak_humidity_at: string | null;
+  reading_count: number;
+  trend_temp: "rising" | "falling" | "stable";
+  trend_humidity: "rising" | "falling" | "stable";
+}
+
 export interface Schedule {
   id: number;
   relay: number;

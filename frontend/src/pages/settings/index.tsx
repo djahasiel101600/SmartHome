@@ -62,7 +62,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="px-6 lg:px-8 py-6 max-w-3xl mx-auto space-y-6 animate-fade-in">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto space-y-6 animate-fade-in">
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
           Settings

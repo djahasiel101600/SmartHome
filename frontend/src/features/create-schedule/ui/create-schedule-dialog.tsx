@@ -187,14 +187,14 @@ export function CreateScheduleDialog({
             </div>
             <div className="space-y-2">
               <Label className="text-slate-600">Days</Label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {DAYS_OF_WEEK.map((day, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => toggleDay(i)}
                     className={cn(
-                      "h-9 w-11 rounded-lg text-xs font-medium transition-all duration-150",
+                      "h-10 w-12 rounded-lg text-xs font-medium transition-all duration-150",
                       selectedDays.includes(i)
                         ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
                         : "bg-slate-100 text-slate-500 hover:bg-slate-200",

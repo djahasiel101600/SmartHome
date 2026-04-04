@@ -42,3 +42,36 @@ class SensorInsight(models.Model):
 
     def __str__(self):
         return f"[{self.severity}] {self.device.name} @ {self.created_at}"
+
+
+class SensorAggregate(models.Model):
+    PERIOD_CHOICES = [
+        ("hourly", "Hourly"),
+        ("daily", "Daily"),
+    ]
+
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name="sensor_aggregates")
+    period_type = models.CharField(max_length=10, choices=PERIOD_CHOICES)
+    period_start = models.DateTimeField()
+    temp_min = models.FloatField()
+    temp_max = models.FloatField()
+    temp_avg = models.FloatField()
+    humidity_min = models.FloatField()
+    humidity_max = models.FloatField()
+    humidity_avg = models.FloatField()
+    reading_count = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["-period_start"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device", "period_type", "period_start"],
+                name="unique_device_period",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["device", "period_type", "-period_start"]),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} {self.period_type} @ {self.period_start}"

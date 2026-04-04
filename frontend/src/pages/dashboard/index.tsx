@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { deviceApi, useDeviceStore } from "@/entities/device";
 import { useRelayStore } from "@/entities/relay";
 import { sensorApi, useSensorStore } from "@/entities/sensor";
@@ -7,11 +7,13 @@ import { RelayControlPanel } from "@/widgets/relay-control-panel";
 import { SensorMonitor } from "@/widgets/sensor-monitor";
 import { SensorInsights } from "@/widgets/sensor-insights";
 import { SensorHistoryChart } from "@/widgets/sensor-history-chart";
+import { SensorStats } from "@/widgets/sensor-stats";
 import { ScheduleList } from "@/widgets/schedule-list";
 import { Badge } from "@/shared/ui";
 import { Cpu, Clock } from "lucide-react";
 
 export function DashboardPage() {
+  const [chartRange, setChartRange] = useState("24h");
   const setDevices = useDeviceStore((s) => s.setDevices);
   const setRelays = useRelayStore((s) => s.setRelays);
   const setLatest = useSensorStore((s) => s.setLatest);
@@ -48,14 +50,14 @@ export function DashboardPage() {
   }, [setDevices, setRelays, setLatest, setInsight, setSchedules]);
 
   return (
-    <div className="px-6 lg:px-8 py-6 space-y-8 max-w-6xl mx-auto animate-fade-in">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6 sm:space-y-8 max-w-6xl mx-auto animate-fade-in">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
           Dashboard
         </h1>
         {devices.length > 0 && (
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
             <Cpu className="h-4 w-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">
               {devices[0].name}
@@ -91,7 +93,9 @@ export function DashboardPage() {
       </section>
 
       {/* Sensor history chart */}
-      <SensorHistoryChart />
+      <SensorStats range={chartRange} />
+
+      <SensorHistoryChart range={chartRange} onRangeChange={setChartRange} />
 
       {/* Schedules */}
       <ScheduleList />

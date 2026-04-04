@@ -123,7 +123,7 @@ export function AppLayout() {
       </aside>
 
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
             <Zap className="h-4 w-4 text-white" />
@@ -146,7 +146,7 @@ export function AppLayout() {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-slate-200 bg-white py-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-slate-200 bg-white py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = location.pathname === href;
           return (
@@ -154,7 +154,7 @@ export function AppLayout() {
               key={href}
               to={href}
               className={cn(
-                "flex flex-col items-center gap-1 px-3 py-1 text-xs font-medium transition-colors",
+                "flex flex-col items-center gap-1 min-h-[44px] justify-center px-3 py-1.5 text-xs font-medium transition-colors",
                 active ? "text-indigo-600" : "text-slate-400",
               )}
             >
@@ -166,8 +166,8 @@ export function AppLayout() {
       </nav>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden md:pt-0 pt-14 pb-16 md:pb-0">
-        <main className="flex-1 overflow-y-auto">
+      <div className="flex flex-1 flex-col overflow-hidden md:pt-0 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="flex-1 overflow-y-auto overscroll-y-contain">
           <Outlet />
         </main>
       </div>

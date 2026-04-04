@@ -28,7 +28,7 @@ export function SchedulesPage() {
   }, [setSchedules, setDevices, setRelays]);
 
   return (
-    <div className="px-6 lg:px-8 py-6 max-w-4xl mx-auto animate-fade-in">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto animate-fade-in">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
           Schedules

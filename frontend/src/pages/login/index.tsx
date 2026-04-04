@@ -44,7 +44,7 @@ export function LoginPage() {
       </div>
 
       {/* Right form panel */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center bg-slate-50 px-6">
+      <div className="flex w-full lg:w-1/2 items-center justify-center bg-slate-50 px-4 sm:px-6">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-3 mb-10">

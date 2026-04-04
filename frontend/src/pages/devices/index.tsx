@@ -199,9 +199,9 @@ export function DevicesPage() {
   };
 
   return (
-    <div className="px-6 lg:px-8 py-6 max-w-5xl mx-auto space-y-6 animate-fade-in">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto space-y-6 animate-fade-in">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Devices
@@ -241,7 +241,7 @@ export function DevicesPage() {
       {devices.map((device) => (
         <Card key={device.id} className="overflow-hidden">
           <CardHeader>
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div
                   className={cn(
@@ -255,7 +255,7 @@ export function DevicesPage() {
                 </div>
                 <div>
                   {editingDevice?.id === device.id ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Input
                         value={editingDevice.name}
                         onChange={(e) =>
@@ -264,7 +264,7 @@ export function DevicesPage() {
                             name: e.target.value,
                           })
                         }
-                        className="h-8 w-48"
+                        className="h-8 w-full sm:w-48"
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleSaveDeviceName()
                         }
@@ -330,7 +330,7 @@ export function DevicesPage() {
                 size="sm"
                 onClick={() => handleDeleteDevice(device)}
                 disabled={deletingId === device.id}
-                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 self-start"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -339,10 +339,10 @@ export function DevicesPage() {
 
           {/* Device ID */}
           <CardContent className="pt-0 pb-4">
-            <div className="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between">
-              <span className="text-xs text-slate-500">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-500 min-w-0">
                 Device ID:{" "}
-                <code className="bg-white px-1.5 py-0.5 rounded font-mono text-xs text-slate-600 border border-slate-200">
+                <code className="bg-white px-1.5 py-0.5 rounded font-mono text-xs text-slate-600 border border-slate-200 break-all">
                   {device.device_id}
                 </code>
               </span>
@@ -408,7 +408,7 @@ export function DevicesPage() {
                     </div>
                     <div>
                       {editingRelay?.id === relay.id ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <Input
                             value={editingRelay.label}
                             onChange={(e) =>
@@ -417,7 +417,7 @@ export function DevicesPage() {
                                 label: e.target.value,
                               })
                             }
-                            className="h-7 w-32 text-sm"
+                            className="h-7 w-full sm:w-32 text-sm"
                             onKeyDown={(e) =>
                               e.key === "Enter" && handleSaveRelayLabel()
                             }

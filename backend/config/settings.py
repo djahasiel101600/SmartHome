@@ -156,16 +156,28 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.schedules.tasks.check_recurring_schedules",
         "schedule": crontab(minute="*"),  # every minute, on the minute
     },
+    "aggregate-hourly-readings": {
+        "task": "apps.monitoring.tasks.aggregate_hourly_readings",
+        "schedule": crontab(minute=5),  # at :05 past every hour
+    },
+    "aggregate-daily-readings": {
+        "task": "apps.monitoring.tasks.aggregate_daily_readings",
+        "schedule": crontab(hour=0, minute=15),  # daily at 00:15
+    },
+    "prune-old-readings": {
+        "task": "apps.monitoring.tasks.prune_old_readings",
+        "schedule": crontab(hour=1, minute=0),  # daily at 01:00
+    },
 }
 
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
+# Sensor insight settings
 SENSOR_COMFORT_THRESHOLDS = {
-    "temp_min": 18,
-    "temp_max": 26,
-    "humidity_min": 30,
-    "humidity_max": 60,
+    "temp_min": float(os.getenv("SENSOR_TEMP_MIN", "18")),
+    "temp_max": float(os.getenv("SENSOR_TEMP_MAX", "28")),
+    "humidity_min": float(os.getenv("SENSOR_HUMIDITY_MIN", "30")),
+    "humidity_max": float(os.getenv("SENSOR_HUMIDITY_MAX", "70")),
 }
-
-INSIGHT_CACHE_MINUTES = 30
+INSIGHT_CACHE_MINUTES = int(os.getenv("INSIGHT_CACHE_MINUTES", "15"))

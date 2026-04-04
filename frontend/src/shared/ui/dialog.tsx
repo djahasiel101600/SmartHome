@@ -15,7 +15,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-50 w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-slide-up">
+      <div className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl animate-slide-up">
         {children}
       </div>
     </div>

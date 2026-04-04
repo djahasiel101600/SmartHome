@@ -61,7 +61,7 @@ export function ScheduleCard({ schedule, actions }: ScheduleCardProps) {
       )}
     >
       <CardContent className="p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
               className={cn(
@@ -93,7 +93,7 @@ export function ScheduleCard({ schedule, actions }: ScheduleCardProps) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-center">
             <Badge variant={schedule.is_active ? "success" : "secondary"}>
               {schedule.is_active ? "Active" : "Inactive"}
             </Badge>
