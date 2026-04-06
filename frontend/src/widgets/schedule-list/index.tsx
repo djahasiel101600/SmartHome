@@ -5,11 +5,23 @@ import { ManageScheduleActions } from "@/features/manage-schedule";
 import { CreateScheduleDialog } from "@/features/create-schedule";
 import { useRelayStore } from "@/entities/relay";
 import { Plus, Calendar } from "lucide-react";
+import type { Schedule } from "@/shared/types";
 
 export function ScheduleList() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
   const schedules = useScheduleStore((s) => s.schedules);
   const relays = useRelayStore((s) => s.relays);
+
+  const handleEdit = (schedule: Schedule) => {
+    setEditSchedule(schedule);
+    setDialogOpen(true);
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) setEditSchedule(null);
+  };
 
   return (
     <section>
@@ -27,7 +39,7 @@ export function ScheduleList() {
         </div>
         <Button
           size="sm"
-          onClick={() => setDialogOpen(true)}
+          onClick={() => { setEditSchedule(null); setDialogOpen(true); }}
           className="gap-1.5"
         >
           <Plus className="h-4 w-4" />
@@ -49,8 +61,8 @@ export function ScheduleList() {
               schedule={schedule}
               actions={
                 <ManageScheduleActions
-                  scheduleId={schedule.id}
-                  isActive={schedule.is_active}
+                  schedule={schedule}
+                  onEdit={handleEdit}
                 />
               }
             />
@@ -60,8 +72,9 @@ export function ScheduleList() {
 
       <CreateScheduleDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogChange}
         relays={relays}
+        schedule={editSchedule}
       />
     </section>
   );

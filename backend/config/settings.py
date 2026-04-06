@@ -76,6 +76,9 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": Path(os.getenv("DATABASE_PATH", BASE_DIR / "db.sqlite3")),
+        "OPTIONS": {
+            "timeout": 30,
+        },
     }
 }
 
@@ -151,10 +154,27 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Cache (Redis-backed for cross-process sharing between Celery workers)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("CACHE_REDIS_URL", "redis://127.0.0.1:6379/2"),
+    }
+}
+
 CELERY_BEAT_SCHEDULE = {
     "check-recurring-schedules-every-minute": {
         "task": "apps.schedules.tasks.check_recurring_schedules",
         "schedule": crontab(minute="*"),  # every minute, on the minute
+    },
+    "evaluate-automation-rules-every-minute": {
+        "task": "apps.schedules.tasks.evaluate_automation_rules",
+        "schedule": crontab(minute="*"),  # every minute, as safety net
+    },
+    "check-battery-level-every-minute": {
+        "task": "apps.schedules.tasks.check_battery_level",
+        "schedule": crontab(minute="*"),
     },
     "aggregate-hourly-readings": {
         "task": "apps.monitoring.tasks.aggregate_hourly_readings",

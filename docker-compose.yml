@@ -19,6 +19,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - CORS_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1,http://localhost:80,http://localhost:8080
+      - CACHE_REDIS_URL=redis://redis:6379/2
       - DATABASE_PATH=/app/data/db.sqlite3
       - TZ=Asia/Manila
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -37,6 +38,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CACHE_REDIS_URL=redis://redis:6379/2
       - DATABASE_PATH=/app/data/db.sqlite3
       - TZ=Asia/Manila
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -56,6 +58,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CACHE_REDIS_URL=redis://redis:6379/2
       - DATABASE_PATH=/app/data/db.sqlite3
       - TZ=Asia/Manila
     depends_on:

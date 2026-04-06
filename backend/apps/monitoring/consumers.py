@@ -21,39 +21,26 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
         self.device_group = f"device_{self.device_id}"
         self.device = None
 
-        # Validate device exists
         try:
+            # Validate device exists
             self.device = await sync_to_async(
                 Device.objects.get
             )(device_id=self.device_id)
         except Device.DoesNotExist:
             await self.close(code=4001)
             return
+        except Exception:
+            logger.exception(f"Error looking up device {self.device_id}")
+            await self.close(code=4002)
+            return
 
-        # Join device group
-        await self.channel_layer.group_add(self.device_group, self.channel_name)
-        await self.accept()
+        try:
+            # Join device group
+            await self.channel_layer.group_add(self.device_group, self.channel_name)
+            await self.accept()
 
-        # Mark device online
-        await self._set_device_online(True)
-
-        # Notify dashboard
-        await self.channel_layer.group_send(
-            "dashboard",
-            {
-                "type": "device_status",
-                "data": {
-                    "device_id": str(self.device_id),
-                    "is_online": True,
-                },
-            },
-        )
-
-        logger.info(f"Device {self.device_id} connected")
-
-    async def disconnect(self, close_code):
-        if self.device:
-            await self._set_device_online(False)
+            # Mark device online
+            await self._set_device_online(True)
 
             # Notify dashboard
             await self.channel_layer.group_send(
@@ -62,25 +49,51 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
                     "type": "device_status",
                     "data": {
                         "device_id": str(self.device_id),
-                        "is_online": False,
+                        "is_online": True,
                     },
                 },
             )
 
-        await self.channel_layer.group_discard(self.device_group, self.channel_name)
-        logger.info(f"Device {self.device_id} disconnected")
+            logger.info(f"Device {self.device_id} connected")
+        except Exception:
+            logger.exception(f"Error during connect for device {self.device_id}")
+
+    async def disconnect(self, close_code):
+        try:
+            if self.device:
+                await self._set_device_online(False)
+
+                # Notify dashboard
+                await self.channel_layer.group_send(
+                    "dashboard",
+                    {
+                        "type": "device_status",
+                        "data": {
+                            "device_id": str(self.device_id),
+                            "is_online": False,
+                        },
+                    },
+                )
+
+            await self.channel_layer.group_discard(self.device_group, self.channel_name)
+        except Exception:
+            logger.exception(f"Error during disconnect for device {self.device_id}")
+        logger.info(f"Device {self.device_id} disconnected (code={close_code})")
 
     async def receive_json(self, content):
         msg_type = content.get("type")
 
-        if msg_type == "sensor_data":
-            await self._handle_sensor_data(content)
-        elif msg_type == "relay_state":
-            await self._handle_relay_state(content)
-        elif msg_type == "heartbeat":
-            await self._update_last_seen()
-        else:
-            logger.warning(f"Unknown message type from device {self.device_id}: {msg_type}")
+        try:
+            if msg_type == "sensor_data":
+                await self._handle_sensor_data(content)
+            elif msg_type == "relay_state":
+                await self._handle_relay_state(content)
+            elif msg_type == "heartbeat":
+                await self._update_last_seen()
+            else:
+                logger.warning(f"Unknown message type from device {self.device_id}: {msg_type}")
+        except Exception:
+            logger.exception(f"Error processing {msg_type} from device {self.device_id}")
 
     async def send_command(self, event):
         """Send a command to the device (called via channel layer)."""
@@ -93,16 +106,31 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
         if temperature is None or humidity is None:
             return
 
-        # Save to database
-        await sync_to_async(SensorReading.objects.create)(
-            device=self.device,
-            temperature=temperature,
-            humidity=humidity,
-        )
+        # Run all synchronous DB and celery operations in a single thread pool
+        # call to minimise async→sync context switches that delay Twisted's
+        # PING/PONG handling and cause the ESP to disconnect.
+        @sync_to_async
+        def _persist_and_dispatch():
+            from .tasks import generate_sensor_insight
+            from apps.schedules.tasks import evaluate_automation_rules
 
-        await self._update_last_seen()
+            SensorReading.objects.create(
+                device=self.device,
+                temperature=temperature,
+                humidity=humidity,
+            )
+            Device.objects.filter(device_id=self.device_id).update(
+                last_seen=timezone.now(),
+            )
+            if check_thresholds(temperature, humidity):
+                generate_sensor_insight.delay(
+                    str(self.device_id), temperature, humidity
+                )
+            evaluate_automation_rules.delay(device_id=str(self.device_id))
 
-        # Broadcast to dashboard
+        await _persist_and_dispatch()
+
+        # Broadcast to dashboard (async Redis — non-blocking)
         await self.channel_layer.group_send(
             "dashboard",
             {
@@ -115,14 +143,6 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
                 },
             },
         )
-
-        # Check thresholds and dispatch insight generation
-        if check_thresholds(temperature, humidity):
-            from .tasks import generate_sensor_insight
-
-            generate_sensor_insight.delay(
-                str(self.device_id), temperature, humidity
-            )
 
     async def _handle_relay_state(self, data):
         relay_number = data.get("relay")

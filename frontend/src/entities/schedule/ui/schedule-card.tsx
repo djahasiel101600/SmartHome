@@ -3,7 +3,14 @@ import { Card, CardContent, Badge } from "@/shared/ui";
 import { formatDuration, formatDaysOfWeek } from "@/shared/lib";
 import { useCountdown } from "@/shared/hooks/useCountdown";
 import type { Schedule } from "@/shared/types";
-import { Clock, Repeat, Timer } from "lucide-react";
+import { Clock, Repeat, Timer, Zap } from "lucide-react";
+
+const OPERATOR_SYMBOLS: Record<string, string> = {
+  gt: ">",
+  lt: "<",
+  gte: "≥",
+  lte: "≤",
+};
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -52,6 +59,21 @@ function TimerCountdown({ schedule }: { schedule: Schedule }) {
 
 export function ScheduleCard({ schedule, actions }: ScheduleCardProps) {
   const isTimer = schedule.schedule_type === "timer";
+  const isAutomation = schedule.schedule_type === "automation";
+
+  const iconConfig = isTimer
+    ? { bg: "bg-amber-50 text-amber-600", icon: <Clock className="h-5 w-5" /> }
+    : isAutomation
+      ? { bg: "bg-emerald-50 text-emerald-600", icon: <Zap className="h-5 w-5" /> }
+      : { bg: "bg-indigo-50 text-indigo-600", icon: <Repeat className="h-5 w-5" /> };
+
+  const description = isTimer && schedule.timer
+    ? `${formatDuration(schedule.timer.duration_minutes)} → ${schedule.timer.action.toUpperCase()}${schedule.timer.counter_action_minutes ? ` then ${schedule.timer.action === "on" ? "OFF" : "ON"} after ${schedule.timer.counter_action_minutes}min` : ""}`
+    : isAutomation && schedule.automation
+      ? `When ${schedule.automation.sensor_field} ${OPERATOR_SYMBOLS[schedule.automation.operator] ?? schedule.automation.operator} ${schedule.automation.threshold_value}${schedule.automation.sensor_field === "temperature" ? "°C" : "%"} → ${schedule.automation.action.toUpperCase()}${schedule.automation.counter_action_minutes ? ` then ${schedule.automation.action === "on" ? "OFF" : "ON"} after ${schedule.automation.counter_action_minutes}min` : ""}`
+      : schedule.recurring
+        ? `${schedule.recurring.time} on ${formatDaysOfWeek(schedule.recurring.days_of_week)} → ${schedule.recurring.action.toUpperCase()}${schedule.recurring.counter_action_minutes ? ` then ${schedule.recurring.action === "on" ? "OFF" : "ON"} after ${schedule.recurring.counter_action_minutes}min` : ""}`
+        : "";
 
   return (
     <Card
@@ -66,16 +88,10 @@ export function ScheduleCard({ schedule, actions }: ScheduleCardProps) {
             <div
               className={cn(
                 "flex h-10 w-10 items-center justify-center rounded-xl",
-                isTimer
-                  ? "bg-amber-50 text-amber-600"
-                  : "bg-indigo-50 text-indigo-600",
+                iconConfig.bg,
               )}
             >
-              {isTimer ? (
-                <Clock className="h-5 w-5" />
-              ) : (
-                <Repeat className="h-5 w-5" />
-              )}
+              {iconConfig.icon}
             </div>
             <div>
               <p className="font-medium text-slate-900">
@@ -84,13 +100,12 @@ export function ScheduleCard({ schedule, actions }: ScheduleCardProps) {
                   Relay {schedule.relay_number}
                 </span>
               </p>
-              <p className="text-sm text-slate-500">
-                {isTimer && schedule.timer
-                  ? `${formatDuration(schedule.timer.duration_minutes)} → ${schedule.timer.action.toUpperCase()}`
-                  : schedule.recurring
-                    ? `${schedule.recurring.time} on ${formatDaysOfWeek(schedule.recurring.days_of_week)} → ${schedule.recurring.action.toUpperCase()}`
-                    : ""}
-              </p>
+              <p className="text-sm text-slate-500">{description}</p>
+              {isAutomation && schedule.automation?.last_triggered_at && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Last triggered: {new Date(schedule.automation.last_triggered_at).toLocaleString()}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 self-end sm:self-center">

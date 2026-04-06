@@ -67,10 +67,11 @@ export interface Schedule {
   relay: number;
   relay_label: string;
   relay_number: number;
-  schedule_type: "timer" | "recurring";
+  schedule_type: "timer" | "recurring" | "automation";
   is_active: boolean;
   timer: TimerSchedule | null;
   recurring: RecurringSchedule | null;
+  automation: AutomationSchedule | null;
   created_at: string;
 }
 
@@ -80,12 +81,26 @@ export interface TimerSchedule {
   started_at: string;
   expires_at: string;
   celery_task_id: string;
+  counter_action_minutes: number | null;
 }
 
 export interface RecurringSchedule {
   time: string;
   days_of_week: number[];
   action: "on" | "off";
+  counter_action_minutes: number | null;
+}
+
+export interface AutomationSchedule {
+  sensor_field: "temperature" | "humidity" | "battery";
+  operator: "gt" | "lt" | "gte" | "lte";
+  threshold_value: number;
+  action: "on" | "off";
+  cooldown_minutes: number;
+  last_triggered_at: string | null;
+  counter_action_minutes: number | null;
+  source_device_id: string | null;
+  source_device_name: string | null;
 }
 
 export interface User {
