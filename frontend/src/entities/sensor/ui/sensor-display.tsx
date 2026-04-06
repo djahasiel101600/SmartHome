@@ -1,12 +1,33 @@
 import { Card, CardContent } from "@/shared/ui";
-import type { SensorReading } from "@/shared/types";
-import { Thermometer, Droplets } from "lucide-react";
+import type { BatteryStatus, SensorReading } from "@/shared/types";
+import { Thermometer, Droplets, Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning } from "lucide-react";
 
 interface SensorDisplayProps {
   reading: SensorReading | null;
+  battery?: BatteryStatus | null;
 }
 
-export function SensorDisplay({ reading }: SensorDisplayProps) {
+function getBatteryIcon(level: number, status: string) {
+  if (status === "charging" || status === "fully-charged") return BatteryCharging;
+  if (level >= 80) return BatteryFull;
+  if (level >= 50) return BatteryMedium;
+  if (level >= 20) return BatteryLow;
+  return BatteryWarning;
+}
+
+function getBatteryColor(level: number, status: string) {
+  if (status === "charging" || status === "fully-charged")
+    return { bg: "bg-emerald-50", text: "text-emerald-500", bar: "from-emerald-400 to-green-500" };
+  if (level >= 50) return { bg: "bg-emerald-50", text: "text-emerald-500", bar: "from-emerald-400 to-green-500" };
+  if (level >= 20) return { bg: "bg-amber-50", text: "text-amber-500", bar: "from-amber-400 to-yellow-500" };
+  return { bg: "bg-red-50", text: "text-red-500", bar: "from-red-400 to-rose-500" };
+}
+
+function formatStatus(status: string) {
+  return status.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function SensorDisplay({ reading, battery }: SensorDisplayProps) {
   if (!reading) {
     return (
       <Card>
@@ -19,8 +40,11 @@ export function SensorDisplay({ reading }: SensorDisplayProps) {
     );
   }
 
+  const BatteryIcon = battery ? getBatteryIcon(battery.level, battery.status) : Battery;
+  const batteryColor = battery ? getBatteryColor(battery.level, battery.status) : null;
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className={`grid grid-cols-1 ${battery ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-4`}>
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <div className="flex items-center gap-4 p-5">
@@ -63,6 +87,32 @@ export function SensorDisplay({ reading }: SensorDisplayProps) {
           <div className="h-1 bg-linear-to-r from-sky-400 to-blue-500" />
         </CardContent>
       </Card>
+      {battery && batteryColor && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="flex items-center gap-4 p-5">
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${batteryColor.bg} ${batteryColor.text}`}>
+                <BatteryIcon className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Battery
+                </p>
+                <p className="text-3xl font-bold text-slate-900 tabular-nums">
+                  {battery.level}
+                  <span className="text-lg font-medium text-slate-400 ml-0.5">
+                    %
+                  </span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {formatStatus(battery.status)}
+                </p>
+              </div>
+            </div>
+            <div className={`h-1 bg-linear-to-r ${batteryColor.bar}`} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

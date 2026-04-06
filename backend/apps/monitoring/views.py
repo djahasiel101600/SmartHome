@@ -187,3 +187,21 @@ class SensorInsightLatestView(APIView):
         if not insight:
             return Response({"detail": "No insights available."}, status=404)
         return Response(SensorInsightSerializer(insight).data)
+
+
+class BatteryStatusView(APIView):
+    """Return the current server battery level and charging status from cache."""
+
+    def get(self, request):
+        from django.core.cache import cache
+
+        level = cache.get("server_battery_level")
+        status = cache.get("server_battery_status")
+
+        if level is None:
+            return Response({"detail": "No battery data available."}, status=404)
+
+        return Response({
+            "level": level,
+            "status": status or "unknown",
+        })

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    BatteryStatusView,
     SensorAggregateHistoryView,
     SensorHistoryView,
     SensorInsightLatestView,
@@ -14,4 +15,5 @@ urlpatterns = [
     path("sensors/history/aggregated/", SensorAggregateHistoryView.as_view(), name="sensor-history-aggregated"),
     path("sensors/stats/", SensorStatsView.as_view(), name="sensor-stats"),
     path("sensors/insights/latest/", SensorInsightLatestView.as_view(), name="sensor-insight-latest"),
+    path("battery/", BatteryStatusView.as_view(), name="battery-status"),
 ]

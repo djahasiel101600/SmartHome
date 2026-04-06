@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SensorAggregate, SensorInsight, SensorReading, SensorStats } from "@/shared/types";
+import type { SensorAggregate, SensorInsight, SensorReading, SensorStats, BatteryStatus } from "@/shared/types";
 
 interface SensorStore {
   latest: SensorReading | null;
@@ -7,12 +7,14 @@ interface SensorStore {
   aggregatedHistory: SensorAggregate[];
   stats: SensorStats | null;
   insight: SensorInsight | null;
+  battery: BatteryStatus | null;
   setLatest: (reading: SensorReading) => void;
   setHistory: (readings: SensorReading[]) => void;
   setAggregatedHistory: (aggregates: SensorAggregate[]) => void;
   setStats: (stats: SensorStats) => void;
   addReading: (reading: SensorReading) => void;
   setInsight: (insight: SensorInsight) => void;
+  setBattery: (battery: BatteryStatus) => void;
 }
 
 export const useSensorStore = create<SensorStore>((set) => ({
@@ -21,6 +23,7 @@ export const useSensorStore = create<SensorStore>((set) => ({
   aggregatedHistory: [],
   stats: null,
   insight: null,
+  battery: null,
   setLatest: (reading) => set({ latest: reading }),
   setHistory: (readings) => set({ history: readings }),
   setAggregatedHistory: (aggregates) => set({ aggregatedHistory: aggregates }),
@@ -31,4 +34,5 @@ export const useSensorStore = create<SensorStore>((set) => ({
       history: [...state.history, reading],
     })),
   setInsight: (insight) => set({ insight }),
+  setBattery: (battery) => set({ battery }),
 }));

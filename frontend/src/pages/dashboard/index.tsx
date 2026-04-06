@@ -18,6 +18,7 @@ export function DashboardPage() {
   const setRelays = useRelayStore((s) => s.setRelays);
   const setLatest = useSensorStore((s) => s.setLatest);
   const setInsight = useSensorStore((s) => s.setInsight);
+  const setBattery = useSensorStore((s) => s.setBattery);
   const setSchedules = useScheduleStore((s) => s.setSchedules);
   const devices = useDeviceStore((s) => s.devices);
 
@@ -43,11 +44,16 @@ export function DashboardPage() {
       .then(({ data }) => setInsight(data))
       .catch(() => {});
 
+    sensorApi
+      .getBattery()
+      .then(({ data }) => setBattery(data))
+      .catch(() => {});
+
     scheduleApi.getAll().then(({ data }) => {
       const list = Array.isArray(data) ? data : (data.results ?? []);
       setSchedules(list);
     });
-  }, [setDevices, setRelays, setLatest, setInsight, setSchedules]);
+  }, [setDevices, setRelays, setLatest, setInsight, setBattery, setSchedules]);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6 sm:space-y-8 max-w-6xl mx-auto animate-fade-in">

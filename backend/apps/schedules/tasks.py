@@ -148,43 +148,115 @@ def check_recurring_schedules():
         )
 
 
-@shared_task
-def check_battery_level():
-    """Read the host machine battery level and store it in cache for automation rules."""
-    battery_path = "/sys/class/power_supply/BAT0/capacity"
-    alt_battery_path = "/sys/class/power_supply/BAT1/capacity"
+def _read_battery_sysfs():
+    """Try reading battery info from /sys/class/power_supply/."""
+    import glob
 
     level = None
-    for path in [battery_path, alt_battery_path]:
+    status = None
+
+    # Auto-discover battery paths (BAT0, BAT1, CMB0, CMB1, etc.)
+    capacity_files = sorted(glob.glob("/sys/class/power_supply/*/capacity"))
+    for cap_path in capacity_files:
         try:
-            with open(path, "r") as f:
+            with open(cap_path, "r") as f:
                 level = int(f.read().strip())
-                break
+            # Read status from the same power supply directory
+            status_path = cap_path.replace("capacity", "status")
+            try:
+                with open(status_path, "r") as f:
+                    status = f.read().strip().lower()
+            except (FileNotFoundError, PermissionError):
+                status = "unknown"
+            break
         except (FileNotFoundError, ValueError, PermissionError):
             continue
 
+    return level, status
+
+
+def _read_battery_upower():
+    """Try reading battery info via upower (auto-discovers battery device)."""
+    import re
+    import subprocess
+
+    # First, enumerate available upower devices to find a battery
+    try:
+        enum_result = subprocess.run(
+            ["upower", "-e"],
+            capture_output=True, text=True, timeout=5,
+        )
+        battery_path = None
+        for line in enum_result.stdout.splitlines():
+            if "battery" in line.lower():
+                battery_path = line.strip()
+                break
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None, None
+
+    if not battery_path:
+        return None, None
+
+    try:
+        result = subprocess.run(
+            ["upower", "-i", battery_path],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None, None
+
+    output = result.stdout
+    level = None
+    status = None
+
+    percent_match = re.search(r"percentage:\s+(\d+)%", output)
+    if percent_match:
+        level = int(percent_match.group(1))
+
+    status_match = re.search(r"state:\s+(\S+)", output)
+    if status_match:
+        status = status_match.group(1).lower()
+
+    return level, status
+
+
+@shared_task
+def check_battery_level():
+    """Read the host machine battery level and status, cache it, and broadcast to dashboard."""
+    level, status = _read_battery_sysfs()
+
     if level is None:
-        # Try upower as fallback
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["upower", "-i", "/org/freedesktop/UPower/devices/battery_BAT0"],
-                capture_output=True, text=True, timeout=5,
-            )
-            for line in result.stdout.splitlines():
-                if "percentage" in line:
-                    level = int(line.split(":")[-1].strip().replace("%", ""))
-                    break
-        except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
-            pass
+        level, status = _read_battery_upower()
 
     if level is None:
         logger.debug("No battery detected on this system")
         return
 
+    status = status or "unknown"
+
     from django.core.cache import cache
+
+    prev_level = cache.get("server_battery_level")
+    prev_status = cache.get("server_battery_status")
+
     cache.set("server_battery_level", level, timeout=300)
-    logger.debug(f"Battery level: {level}%")
+    cache.set("server_battery_status", status, timeout=300)
+
+    # Broadcast to dashboard when value changes (or first reading)
+    if level != prev_level or status != prev_status:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            "dashboard",
+            {
+                "type": "battery_update",
+                "data": {
+                    "level": level,
+                    "status": status,
+                },
+            },
+        )
+
+    logger.debug(f"Battery level: {level}% ({status})")
 
 
 @shared_task

@@ -239,3 +239,10 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
             "type": "insight_update",
             "data": event["data"],
         })
+
+    async def battery_update(self, event):
+        """Broadcast battery level/status update to dashboard clients."""
+        await self.send_json({
+            "type": "battery_update",
+            "data": event["data"],
+        })

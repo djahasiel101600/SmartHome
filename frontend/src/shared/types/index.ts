@@ -156,4 +156,14 @@ export interface WsInsightUpdate {
   };
 }
 
-export type WsMessage = WsRelayUpdate | WsSensorUpdate | WsDeviceStatus | WsInsightUpdate;
+export interface BatteryStatus {
+  level: number;
+  status: string;
+}
+
+export interface WsBatteryUpdate {
+  type: "battery_update";
+  data: BatteryStatus;
+}
+
+export type WsMessage = WsRelayUpdate | WsSensorUpdate | WsDeviceStatus | WsInsightUpdate | WsBatteryUpdate;

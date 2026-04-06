@@ -34,11 +34,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const updateRelayState = useRelayStore((s) => s.updateRelayState);
   const addReading = useSensorStore((s) => s.addReading);
   const setInsight = useSensorStore((s) => s.setInsight);
+  const setBattery = useSensorStore((s) => s.setBattery);
   const updateDeviceStatus = useDeviceStore((s) => s.updateDeviceStatus);
 
   // Keep store actions in refs so the connect callback is stable
-  const storeRefs = useRef({ updateRelayState, addReading, setInsight, updateDeviceStatus });
-  storeRefs.current = { updateRelayState, addReading, setInsight, updateDeviceStatus };
+  const storeRefs = useRef({ updateRelayState, addReading, setInsight, setBattery, updateDeviceStatus });
+  storeRefs.current = { updateRelayState, addReading, setInsight, setBattery, updateDeviceStatus };
 
   const connect = useCallback(() => {
     const token = localStorage.getItem("access_token");
@@ -71,7 +72,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     ws.onmessage = (event) => {
       try {
         const message: WsMessage = JSON.parse(event.data);
-        const { updateRelayState, addReading, setInsight, updateDeviceStatus } = storeRefs.current;
+        const { updateRelayState, addReading, setInsight, setBattery, updateDeviceStatus } = storeRefs.current;
 
         switch (message.type) {
           case "relay_update":
@@ -99,6 +100,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
               humidity: message.data.humidity,
               created_at: message.data.created_at,
             });
+            break;
+          case "battery_update":
+            setBattery(message.data);
             break;
         }
       } catch {

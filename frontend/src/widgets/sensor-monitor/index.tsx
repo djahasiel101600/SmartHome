@@ -4,6 +4,7 @@ import { Activity } from "lucide-react";
 
 export function SensorMonitor() {
   const latest = useSensorStore((s) => s.latest);
+  const battery = useSensorStore((s) => s.battery);
 
   return (
     <section>
@@ -13,7 +14,7 @@ export function SensorMonitor() {
           Environment
         </h2>
       </div>
-      <SensorDisplay reading={latest} />
+      <SensorDisplay reading={latest} battery={battery} />
     </section>
   );
 }
