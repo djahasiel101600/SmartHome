@@ -95,7 +95,45 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
             elif msg_type == "relay_state":
                 await self._handle_relay_state(content)
             elif msg_type == "heartbeat":
+                firmware_version = content.get("firmware_version")
+                if firmware_version:
+                    await self._update_firmware_version(firmware_version)
                 await self._update_last_seen()
+            elif msg_type == "device_info":
+                firmware_version = content.get("firmware_version")
+                if firmware_version:
+                    await self._update_firmware_version(firmware_version)
+                await self._update_last_seen()
+            elif msg_type == "ota_progress":
+                await self.channel_layer.group_send(
+                    "dashboard",
+                    {
+                        "type": "ota_progress",
+                        "data": {
+                            "device_id": str(self.device_id),
+                            "progress": content.get("progress", 0),
+                            "status": content.get("status", "unknown"),
+                        },
+                    },
+                )
+            elif msg_type == "ota_result":
+                success = content.get("success", False)
+                if success:
+                    version = content.get("version", "")
+                    if version:
+                        await self._update_firmware_version(version)
+                await self.channel_layer.group_send(
+                    "dashboard",
+                    {
+                        "type": "ota_result",
+                        "data": {
+                            "device_id": str(self.device_id),
+                            "success": success,
+                            "version": content.get("version", ""),
+                            "error": content.get("error", ""),
+                        },
+                    },
+                )
             else:
                 logger.warning(f"Unknown message type from device {self.device_id}: {msg_type}")
         except Exception:
@@ -196,6 +234,12 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
             last_seen=timezone.now(),
         )
 
+    @sync_to_async
+    def _update_firmware_version(self, version):
+        Device.objects.filter(device_id=self.device_id).update(
+            current_firmware_version=version,
+        )
+
 
 class DashboardConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for the frontend dashboard (JWT authenticated)."""
@@ -257,5 +301,19 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
         """Broadcast battery level/status update to dashboard clients."""
         await self.send_json({
             "type": "battery_update",
+            "data": event["data"],
+        })
+
+    async def ota_progress(self, event):
+        """Broadcast OTA progress to dashboard clients."""
+        await self.send_json({
+            "type": "ota_progress",
+            "data": event["data"],
+        })
+
+    async def ota_result(self, event):
+        """Broadcast OTA result to dashboard clients."""
+        await self.send_json({
+            "type": "ota_result",
             "data": event["data"],
         })

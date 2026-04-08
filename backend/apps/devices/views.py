@@ -1,13 +1,24 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import models
+from django.http import FileResponse
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Device, Relay
-from .serializers import DeviceSerializer, RelayCreateSerializer, RelaySerializer, RelayToggleSerializer
+from .models import Device, FirmwareVersion, Relay
+from .serializers import (
+    DeviceSerializer,
+    FirmwareUploadSerializer,
+    FirmwareVersionSerializer,
+    RelayCreateSerializer,
+    RelaySerializer,
+    RelayToggleSerializer,
+    TriggerOTASerializer,
+)
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
@@ -112,3 +123,80 @@ class RelayToggleView(APIView):
         )
 
         return Response(RelaySerializer(relay).data)
+
+
+class FirmwareVersionListCreateView(APIView):
+    parser_classes = [MultiPartParser]
+
+    def get(self, request):
+        versions = FirmwareVersion.objects.all()
+        return Response(FirmwareVersionSerializer(versions, many=True).data)
+
+    def post(self, request):
+        serializer = FirmwareUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class FirmwareVersionDeleteView(APIView):
+    def delete(self, request, pk):
+        try:
+            fw = FirmwareVersion.objects.get(pk=pk)
+        except FirmwareVersion.DoesNotExist:
+            return Response({"detail": "Firmware version not found."}, status=status.HTTP_404_NOT_FOUND)
+        fw.binary.delete(save=False)
+        fw.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FirmwareDownloadView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, pk):
+        try:
+            fw = FirmwareVersion.objects.get(pk=pk)
+        except FirmwareVersion.DoesNotExist:
+            return Response({"detail": "Firmware version not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        response = FileResponse(fw.binary.open("rb"), content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="firmware-{fw.version}.bin"'
+        response["X-MD5"] = fw.checksum
+        return response
+
+
+class DeviceOTAUpdateView(APIView):
+    def post(self, request, pk):
+        try:
+            device = Device.objects.get(pk=pk)
+        except Device.DoesNotExist:
+            return Response({"detail": "Device not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TriggerOTASerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            fw = FirmwareVersion.objects.get(pk=serializer.validated_data["firmware_id"])
+        except FirmwareVersion.DoesNotExist:
+            return Response({"detail": "Firmware version not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        download_url = request.build_absolute_uri(f"/api/firmware/{fw.pk}/download/")
+
+        channel_layer = get_channel_layer()
+        device_group = f"device_{device.device_id}"
+        async_to_sync(channel_layer.group_send)(
+            device_group,
+            {
+                "type": "send_command",
+                "command": {
+                    "type": "command",
+                    "action": "firmware_update",
+                    "url": download_url,
+                    "version": fw.version,
+                    "checksum": fw.checksum,
+                },
+            },
+        )
+
+        return Response({"detail": f"OTA update to v{fw.version} triggered for {device.name}."})

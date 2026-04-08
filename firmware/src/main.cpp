@@ -18,6 +18,7 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266httpUpdate.h>
 #include <WiFiManager.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
@@ -73,6 +74,10 @@ unsigned long wsReconnectDelay = RECONNECT_INTERVAL;
 int wifiConsecutiveFailures = 0;
 bool wifiWasConnected = false;
 
+// OTA state
+bool otaInProgress = false;
+int otaProgressPercent = 0;
+
 // ===== FORWARD DECLARATIONS =====
 void sendRelayState(int relayNum, bool state);
 void setRelay(int relayNum, bool state);
@@ -84,6 +89,8 @@ void updateDisplay();
 void loadConfig();
 void saveConfig();
 bool configChanged(const char *newHost, const char *newPort, const char *newDeviceId);
+void handleOTAUpdate(const char *url, const char *version);
+void sendDeviceInfo();
 void startWebSocket();
 void stopWebSocket();
 void checkWifiConnection();
@@ -168,10 +175,137 @@ void sendHeartbeat()
 
     JsonDocument doc;
     doc["type"] = "heartbeat";
+    doc["firmware_version"] = FIRMWARE_VERSION;
 
     String payload;
     serializeJson(doc, payload);
     webSocket.sendTXT(payload);
+}
+
+// ===== DEVICE INFO (sent on WebSocket connect) =====
+void sendDeviceInfo()
+{
+    if (!wsConnected)
+        return;
+
+    JsonDocument doc;
+    doc["type"] = "device_info";
+    doc["firmware_version"] = FIRMWARE_VERSION;
+
+    String payload;
+    serializeJson(doc, payload);
+    webSocket.sendTXT(payload);
+}
+
+// ===== OTA UPDATE =====
+void sendOTAProgress(const char *otaStatus, int progress)
+{
+    if (!wsConnected)
+        return;
+
+    JsonDocument doc;
+    doc["type"] = "ota_progress";
+    doc["status"] = otaStatus;
+    doc["progress"] = progress;
+
+    String payload;
+    serializeJson(doc, payload);
+    webSocket.sendTXT(payload);
+}
+
+void sendOTAResult(bool success, const char *version, const char *error)
+{
+    if (!wsConnected)
+        return;
+
+    JsonDocument doc;
+    doc["type"] = "ota_result";
+    doc["success"] = success;
+    doc["version"] = version;
+    if (error)
+        doc["error"] = error;
+
+    String payload;
+    serializeJson(doc, payload);
+    webSocket.sendTXT(payload);
+}
+
+void handleOTAUpdate(const char *url, const char *version)
+{
+    if (otaInProgress)
+    {
+        Serial.println("OTA already in progress, ignoring");
+        return;
+    }
+
+    // Skip if same version
+    if (strcmp(version, FIRMWARE_VERSION) == 0)
+    {
+        Serial.printf("Already on firmware v%s, skipping OTA\n", version);
+        sendOTAResult(false, version, "Already on this version");
+        return;
+    }
+
+    Serial.printf("Starting OTA update to v%s from %s\n", version, url);
+    otaInProgress = true;
+
+    displayMessage("OTA Update", "Downloading...", version, "Do not power off!");
+    sendOTAProgress("starting", 0);
+
+    // Process any pending WebSocket data before blocking OTA
+    webSocket.loop();
+
+    WiFiClient wifiClient;
+
+    ESPhttpUpdate.onProgress([](int progress, int total)
+                             {
+        int pct = (total > 0) ? (progress * 100 / total) : 0;
+        otaProgressPercent = pct;
+        Serial.printf("OTA progress: %d%%\n", pct);
+
+        // Update display periodically
+        if (pct % 10 == 0)
+        {
+            char progressStr[32];
+            snprintf(progressStr, sizeof(progressStr), "Progress: %d%%", pct);
+            displayMessage("OTA Update", "Downloading...", progressStr, "Do not power off!");
+        } });
+
+    ESPhttpUpdate.rebootOnUpdate(false);
+    t_httpUpdate_return ret = ESPhttpUpdate.update(wifiClient, url);
+
+    switch (ret)
+    {
+    case HTTP_UPDATE_OK:
+        Serial.println("OTA update successful! Rebooting...");
+        sendOTAProgress("completed", 100);
+        sendOTAResult(true, version, nullptr);
+        // Give WebSocket time to send the messages
+        webSocket.loop();
+        delay(500);
+        webSocket.loop();
+        displayMessage("OTA Complete!", "Rebooting...", version);
+        delay(1000);
+        ESP.restart();
+        break;
+
+    case HTTP_UPDATE_FAILED:
+    {
+        String errMsg = ESPhttpUpdate.getLastErrorString();
+        Serial.printf("OTA failed: %s\n", errMsg.c_str());
+        sendOTAResult(false, version, errMsg.c_str());
+        displayMessage("OTA Failed!", errMsg.c_str(), "Continuing...");
+        delay(3000);
+        break;
+    }
+
+    case HTTP_UPDATE_NO_UPDATES:
+        Serial.println("OTA: no update available");
+        sendOTAResult(false, version, "No update available");
+        break;
+    }
+
+    otaInProgress = false;
 }
 
 // ===== COMMAND HANDLING =====
@@ -186,6 +320,15 @@ void handleCommand(JsonDocument &doc)
         int relay = doc["relay"];
         bool state = doc["state"];
         setRelay(relay, state);
+    }
+    else if (strcmp(action, "firmware_update") == 0)
+    {
+        const char *url = doc["url"];
+        const char *version = doc["version"];
+        if (url && version)
+        {
+            handleOTAUpdate(url, version);
+        }
     }
 }
 
@@ -255,6 +398,9 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
         {
             sendRelayState(i + 1, relayStates[i]);
         }
+
+        // Report firmware version to server
+        sendDeviceInfo();
         break;
 
     case WStype_TEXT:

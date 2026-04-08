@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deviceApi, useDeviceStore } from "@/entities/device";
+import { deviceApi, firmwareApi, useDeviceStore } from "@/entities/device";
 import { relayApi } from "@/entities/relay";
 import {
   Button,
@@ -30,9 +30,12 @@ import {
   Wifi,
   WifiOff,
   Clock,
+  Upload,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/shared/lib";
-import type { Device } from "@/shared/types";
+import type { Device, FirmwareVersion } from "@/shared/types";
 
 export function DevicesPage() {
   const devices = useDeviceStore((s) => s.devices);
@@ -67,11 +70,53 @@ export function DevicesPage() {
   const [addingRelay, setAddingRelay] = useState(false);
   const [deletingRelayId, setDeletingRelayId] = useState<number | null>(null);
 
+  // Firmware state
+  const [firmwareVersions, setFirmwareVersions] = useState<FirmwareVersion[]>([]);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [fwFile, setFwFile] = useState<File | null>(null);
+  const [fwVersion, setFwVersion] = useState("");
+  const [fwNotes, setFwNotes] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [otaDialogDevice, setOtaDialogDevice] = useState<Device | null>(null);
+  const [selectedFirmwareId, setSelectedFirmwareId] = useState<number | null>(null);
+  const [triggeringOTA, setTriggeringOTA] = useState(false);
+
   useEffect(() => {
     deviceApi.getAll().then(({ data }) => {
       const list = Array.isArray(data) ? data : ((data as any).results ?? []);
       setDevices(list);
     });
+    firmwareApi.getAll().then(({ data }) => {
+      const list = Array.isArray(data) ? data : ((data as any).results ?? []);
+      setFirmwareVersions(list);
+    });
+  }, [setDevices]);
+
+  // Listen for OTA WebSocket events
+  useEffect(() => {
+    const handleOTAProgress = (e: Event) => {
+      const { device_id, progress, status: otaStatus } = (e as CustomEvent).detail;
+      toast.info(`Device ${device_id.slice(0, 8)}... OTA: ${otaStatus} (${progress}%)`);
+    };
+    const handleOTAResult = (e: Event) => {
+      const { device_id, success, version, error } = (e as CustomEvent).detail;
+      if (success) {
+        toast.success(`Device ${device_id.slice(0, 8)}... updated to v${version}`);
+        // Refresh devices to get updated firmware version
+        deviceApi.getAll().then(({ data }) => {
+          const list = Array.isArray(data) ? data : ((data as any).results ?? []);
+          setDevices(list);
+        });
+      } else {
+        toast.error(`OTA failed for ${device_id.slice(0, 8)}...: ${error}`);
+      }
+    };
+    window.addEventListener("ota_progress", handleOTAProgress);
+    window.addEventListener("ota_result", handleOTAResult);
+    return () => {
+      window.removeEventListener("ota_progress", handleOTAProgress);
+      window.removeEventListener("ota_result", handleOTAResult);
+    };
   }, [setDevices]);
 
   const handleAddDevice = async () => {
@@ -198,6 +243,52 @@ export function DevicesPage() {
     }
   };
 
+  const handleUploadFirmware = async () => {
+    if (!fwFile || !fwVersion.trim()) {
+      toast.error("File and version are required");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { data } = await firmwareApi.upload(fwFile, fwVersion.trim(), fwNotes.trim());
+      setFirmwareVersions((prev) => [data, ...prev]);
+      toast.success(`Firmware v${data.version} uploaded`);
+      setFwFile(null);
+      setFwVersion("");
+      setFwNotes("");
+      setUploadDialogOpen(false);
+    } catch {
+      toast.error("Failed to upload firmware");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteFirmware = async (fw: FirmwareVersion) => {
+    try {
+      await firmwareApi.delete(fw.id);
+      setFirmwareVersions((prev) => prev.filter((f) => f.id !== fw.id));
+      toast.success(`Firmware v${fw.version} deleted`);
+    } catch {
+      toast.error("Failed to delete firmware");
+    }
+  };
+
+  const handleTriggerOTA = async () => {
+    if (!otaDialogDevice || !selectedFirmwareId) return;
+    setTriggeringOTA(true);
+    try {
+      await deviceApi.triggerOTA(otaDialogDevice.id, selectedFirmwareId);
+      toast.success(`OTA update triggered for ${otaDialogDevice.name}`);
+      setOtaDialogDevice(null);
+      setSelectedFirmwareId(null);
+    } catch {
+      toast.error("Failed to trigger OTA update");
+    } finally {
+      setTriggeringOTA(false);
+    }
+  };
+
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto space-y-6 animate-fade-in">
       {/* Page header */}
@@ -215,6 +306,73 @@ export function DevicesPage() {
           Add Device
         </Button>
       </div>
+
+      {/* Firmware Management */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Firmware Versions</CardTitle>
+              <CardDescription>
+                Upload firmware binaries and push OTA updates to devices
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setUploadDialogOpen(true)}
+              className="gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Firmware
+            </Button>
+          </div>
+        </CardHeader>
+        {firmwareVersions.length > 0 && (
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {firmwareVersions.map((fw) => (
+                <div
+                  key={fw.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <Badge variant="secondary" className="font-mono">
+                      v{fw.version}
+                    </Badge>
+                    <span className="text-xs text-slate-400">
+                      {new Date(fw.created_at).toLocaleDateString()}
+                    </span>
+                    {fw.release_notes && (
+                      <span className="text-xs text-slate-500 truncate max-w-[200px]">
+                        {fw.release_notes}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                      MD5: {fw.checksum.slice(0, 12)}...
+                    </code>
+                    <button
+                      onClick={() => handleDeleteFirmware(fw)}
+                      className="text-slate-300 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50"
+                      title="Delete firmware version"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        )}
+        {firmwareVersions.length === 0 && (
+          <CardContent className="pt-0">
+            <p className="text-sm text-slate-400 text-center py-4">
+              No firmware versions uploaded yet
+            </p>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Empty state */}
       {devices.length === 0 && (
@@ -357,6 +515,32 @@ export function DevicesPage() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </button>
+            </div>
+          </CardContent>
+
+          {/* Firmware version + OTA */}
+          <CardContent className="pt-0 pb-4">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-500">
+                Firmware:{" "}
+                <code className="bg-white px-1.5 py-0.5 rounded font-mono text-xs text-slate-600 border border-slate-200">
+                  v{device.current_firmware_version || "0.0.0"}
+                </code>
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!device.is_online || firmwareVersions.length === 0}
+                onClick={() => {
+                  setOtaDialogDevice(device);
+                  setSelectedFirmwareId(firmwareVersions[0]?.id ?? null);
+                }}
+                className="gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-7 text-xs"
+                title={!device.is_online ? "Device must be online for OTA" : ""}
+              >
+                <Download className="h-3 w-3" />
+                OTA Update
+              </Button>
             </div>
           </CardContent>
 
@@ -582,6 +766,137 @@ export function DevicesPage() {
                 <Plus className="h-4 w-4" />
               )}
               {addingRelay ? "Adding..." : "Add Relay"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Upload Firmware Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogHeader>
+          <DialogTitle>Upload Firmware</DialogTitle>
+          <p className="text-sm text-slate-500 mt-1">
+            Upload a compiled firmware binary (.bin) for OTA updates
+          </p>
+        </DialogHeader>
+        <div className="space-y-4 mt-4">
+          <div className="space-y-2">
+            <Label>Version</Label>
+            <Input
+              value={fwVersion}
+              onChange={(e) => setFwVersion(e.target.value)}
+              placeholder="e.g. 1.1.0"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Firmware Binary (.bin)</Label>
+            <Input
+              type="file"
+              accept=".bin"
+              onChange={(e) => setFwFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Release Notes (optional)</Label>
+            <Input
+              value={fwNotes}
+              onChange={(e) => setFwNotes(e.target.value)}
+              placeholder="e.g. Fixed WiFi reconnection"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setUploadDialogOpen(false);
+                setFwFile(null);
+                setFwVersion("");
+                setFwNotes("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUploadFirmware}
+              disabled={uploading || !fwFile || !fwVersion.trim()}
+              className="gap-2"
+            >
+              {uploading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {uploading ? "Uploading..." : "Upload"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* OTA Update Dialog */}
+      <Dialog
+        open={otaDialogDevice !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOtaDialogDevice(null);
+            setSelectedFirmwareId(null);
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>OTA Firmware Update</DialogTitle>
+          <p className="text-sm text-slate-500 mt-1">
+            Push a firmware update to{" "}
+            <span className="font-medium text-slate-700">
+              {otaDialogDevice?.name}
+            </span>
+          </p>
+        </DialogHeader>
+        <div className="space-y-4 mt-4">
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Current version:{" "}
+            <code className="font-mono font-medium text-slate-700">
+              v{otaDialogDevice?.current_firmware_version || "0.0.0"}
+            </code>
+          </div>
+          <div className="space-y-2">
+            <Label>Target Firmware Version</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+              value={selectedFirmwareId ?? ""}
+              onChange={(e) =>
+                setSelectedFirmwareId(e.target.value ? Number(e.target.value) : null)
+              }
+            >
+              <option value="">Select a version...</option>
+              {firmwareVersions.map((fw) => (
+                <option key={fw.id} value={fw.id}>
+                  v{fw.version}
+                  {fw.release_notes ? ` — ${fw.release_notes}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setOtaDialogDevice(null);
+                setSelectedFirmwareId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleTriggerOTA}
+              disabled={triggeringOTA || !selectedFirmwareId}
+              className="gap-2"
+            >
+              {triggeringOTA ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {triggeringOTA ? "Sending..." : "Start OTA Update"}
             </Button>
           </div>
         </div>

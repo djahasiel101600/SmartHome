@@ -104,6 +104,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           case "battery_update":
             setBattery(message.data);
             break;
+          case "ota_progress":
+            window.dispatchEvent(
+              new CustomEvent("ota_progress", { detail: message.data })
+            );
+            break;
+          case "ota_result":
+            window.dispatchEvent(
+              new CustomEvent("ota_result", { detail: message.data })
+            );
+            break;
         }
       } catch {
         // Ignore malformed messages

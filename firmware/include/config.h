@@ -1,3 +1,6 @@
+// ===== FIRMWARE VERSION =====
+#define FIRMWARE_VERSION "1.0.0"
+
 // ===== PIN DEFINITIONS =====
 // Relay pins (active LOW - common relay modules)
 #define RELAY_1_PIN D3 // GPIO0

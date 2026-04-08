@@ -4,6 +4,7 @@ export interface Device {
   device_id: string;
   is_online: boolean;
   last_seen: string | null;
+  current_firmware_version: string;
   relays: Relay[];
   created_at: string;
 }
@@ -166,4 +167,31 @@ export interface WsBatteryUpdate {
   data: BatteryStatus;
 }
 
-export type WsMessage = WsRelayUpdate | WsSensorUpdate | WsDeviceStatus | WsInsightUpdate | WsBatteryUpdate;
+export interface FirmwareVersion {
+  id: number;
+  version: string;
+  checksum: string;
+  release_notes: string;
+  created_at: string;
+}
+
+export interface WsOTAProgress {
+  type: "ota_progress";
+  data: {
+    device_id: string;
+    progress: number;
+    status: string;
+  };
+}
+
+export interface WsOTAResult {
+  type: "ota_result";
+  data: {
+    device_id: string;
+    success: boolean;
+    version: string;
+    error: string;
+  };
+}
+
+export type WsMessage = WsRelayUpdate | WsSensorUpdate | WsDeviceStatus | WsInsightUpdate | WsBatteryUpdate | WsOTAProgress | WsOTAResult;
