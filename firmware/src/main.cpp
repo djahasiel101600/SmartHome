@@ -1,8 +1,8 @@
 /*
- * Smart Home Automation - ESP8266 Firmware
+ * Smart Home Automation - ESP8266/ESP32 Firmware
  *
  * Hardware:
- *   - ESP8266 (NodeMCU/Wemos D1 Mini)
+ *   - ESP8266 (NodeMCU/Wemos D1 Mini) or ESP32
  *   - 4-Channel Relay Module (active LOW)
  *   - DHT11 Temperature & Humidity Sensor
  *   - SH1106 128x64 OLED Display (I2C)
@@ -17,14 +17,19 @@
  */
 
 #include <Arduino.h>
+#ifdef ESP32
+#include <WiFi.h>
+#include <LittleFS.h>
+#else
 #include <ESP8266WiFi.h>
+#include <LittleFS.h>
+#endif
 #include <WiFiManager.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <U8g2lib.h>
 #include <Wire.h>
-#include <LittleFS.h>
 
 #include "config.h"
 
@@ -87,15 +92,23 @@ bool configChanged(const char *newHost, const char *newPort, const char *newDevi
 void startWebSocket();
 void stopWebSocket();
 void checkWifiConnection();
+#ifdef ESP32
+void onWifiEvent(WiFiEvent_t event);
+#else
 void onWifiConnect(const WiFiEventStationModeGotIP &event);
 void onWifiDisconnect(const WiFiEventStationModeDisconnected &event);
+#endif
 bool checkConfigResetButton();
 void startCaptivePortal(bool forcePortal);
 void displayMessage(const char *line1, const char *line2 = nullptr, const char *line3 = nullptr, const char *line4 = nullptr);
 
 // WiFi event handlers (stored to prevent garbage collection)
+#ifdef ESP32
+WiFiEventId_t wifiEventHandler;
+#else
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
+#endif
 
 // ===== RELAY CONTROL =====
 void setRelay(int relayNum, bool state)
@@ -293,6 +306,37 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 }
 
 // ===== WIFI EVENT HANDLERS =====
+#ifdef ESP32
+void onWifiEvent(WiFiEvent_t event)
+{
+    switch (event)
+    {
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        Serial.printf("WiFi connected — IP: %s\n", WiFi.localIP().toString().c_str());
+        wifiConsecutiveFailures = 0;
+        wifiReconnectDelay = RECONNECT_INTERVAL;
+        connState = CONN_WIFI_CONNECTED;
+        wifiWasConnected = true;
+        startWebSocket();
+        break;
+
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        Serial.println("WiFi disconnected");
+        stopWebSocket();
+        connState = CONN_WIFI_DISCONNECTED;
+        if (wifiWasConnected)
+        {
+            wifiDisconnectedSince = millis();
+            wifiConsecutiveFailures++;
+            Serial.printf("WiFi failure #%d\n", wifiConsecutiveFailures);
+        }
+        break;
+
+    default:
+        break;
+    }
+}
+#else
 void onWifiConnect(const WiFiEventStationModeGotIP &event)
 {
     Serial.printf("WiFi connected — IP: %s\n", WiFi.localIP().toString().c_str());
@@ -322,6 +366,7 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
         Serial.printf("WiFi failure #%d\n", wifiConsecutiveFailures);
     }
 }
+#endif
 
 // ===== WIFI RECONNECTION =====
 void checkWifiConnection()
@@ -377,11 +422,17 @@ void checkWifiConnection()
 // ===== CONFIG RESET BUTTON =====
 bool checkConfigResetButton()
 {
+#ifdef ESP32
+    // ESP32 BOOT button (GPIO0) — active LOW with internal pull-up
+    pinMode(CONFIG_RESET_PIN, INPUT_PULLUP);
+    if (digitalRead(CONFIG_RESET_PIN) != LOW)
+        return false;
+#else
     pinMode(CONFIG_RESET_PIN, INPUT);
-
     // Check if button is held HIGH (D8/GPIO15 has pull-down by default on NodeMCU)
     if (digitalRead(CONFIG_RESET_PIN) != HIGH)
         return false;
+#endif
 
     Serial.println("Config reset button detected — hold for 3 seconds...");
 
@@ -392,7 +443,12 @@ bool checkConfigResetButton()
         "Release to cancel");
 
     unsigned long start = millis();
+
+#ifdef ESP32
+    while (digitalRead(CONFIG_RESET_PIN) == LOW)
+#else
     while (digitalRead(CONFIG_RESET_PIN) == HIGH)
+#endif
     {
         if (millis() - start >= CONFIG_RESET_HOLD_MS)
         {
@@ -408,7 +464,9 @@ bool checkConfigResetButton()
             return true;
         }
         delay(50);
-        ESP.wdtFeed(); // Keep watchdog happy during wait
+#ifndef ESP32
+        ESP.wdtFeed(); // Keep watchdog happy during wait (ESP8266 only)
+#endif
     }
 
     Serial.println("Config reset cancelled (button released early)");
@@ -730,8 +788,11 @@ void setup()
     Serial.begin(115200);
     Serial.println("\n\nSmart Home Automation - Starting...");
 
+#ifndef ESP32
     // Enable software watchdog (resets ESP if loop hangs for ~8s)
+    // ESP32 has watchdog enabled by default via the IDLE task
     ESP.wdtEnable(WDTO_8S);
+#endif
 
     // Initialize relay pins (all OFF initially)
     for (int i = 0; i < 4; i++)
@@ -800,8 +861,12 @@ void setup()
     WiFi.persistent(true);
 
     // Register WiFi event handlers for runtime reconnection
+#ifdef ESP32
+    wifiEventHandler = WiFi.onEvent(onWifiEvent);
+#else
     wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
     wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
+#endif
 
     Serial.println("WiFi connected!");
     Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
@@ -836,7 +901,9 @@ void setup()
 void loop()
 {
     // Feed the watchdog to prevent reset during normal operation
+#ifndef ESP32
     ESP.wdtFeed();
+#endif
 
     // Process WebSocket messages (only if started)
     if (wsStarted)
