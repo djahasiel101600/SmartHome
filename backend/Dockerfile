@@ -23,4 +23,4 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 8000
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "--ping-interval", "86400", "--ping-timeout", "0", "config.asgi:application"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "--ping-interval", "20", "--ping-timeout", "30", "config.asgi:application"]

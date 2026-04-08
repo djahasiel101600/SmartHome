@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -27,10 +28,12 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
                 Device.objects.get
             )(device_id=self.device_id)
         except Device.DoesNotExist:
+            await self.accept()
             await self.close(code=4001)
             return
         except Exception:
             logger.exception(f"Error looking up device {self.device_id}")
+            await self.accept()
             await self.close(code=4002)
             return
 
@@ -60,22 +63,25 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code):
         try:
-            if self.device:
-                await self._set_device_online(False)
+            async with asyncio.timeout(5):
+                if self.device:
+                    await self._set_device_online(False)
 
-                # Notify dashboard
-                await self.channel_layer.group_send(
-                    "dashboard",
-                    {
-                        "type": "device_status",
-                        "data": {
-                            "device_id": str(self.device_id),
-                            "is_online": False,
+                    # Notify dashboard
+                    await self.channel_layer.group_send(
+                        "dashboard",
+                        {
+                            "type": "device_status",
+                            "data": {
+                                "device_id": str(self.device_id),
+                                "is_online": False,
+                            },
                         },
-                    },
-                )
+                    )
 
-            await self.channel_layer.group_discard(self.device_group, self.channel_name)
+                await self.channel_layer.group_discard(self.device_group, self.channel_name)
+        except asyncio.TimeoutError:
+            logger.warning(f"Disconnect cleanup timed out for device {self.device_id}")
         except Exception:
             logger.exception(f"Error during disconnect for device {self.device_id}")
         logger.info(f"Device {self.device_id} disconnected (code={close_code})")
@@ -198,6 +204,7 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
         self.user = self.scope.get("user")
 
         if not self.user or not self.user.is_authenticated:
+            await self.accept()
             await self.close(code=4003)
             return
 
@@ -206,7 +213,13 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
         logger.info(f"Dashboard client connected: {self.user.username}")
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard("dashboard", self.channel_name)
+        try:
+            async with asyncio.timeout(5):
+                await self.channel_layer.group_discard("dashboard", self.channel_name)
+        except asyncio.TimeoutError:
+            logger.warning("Dashboard disconnect cleanup timed out")
+        except Exception:
+            logger.exception("Error during dashboard disconnect")
 
     async def receive_json(self, content):
         # Dashboard is read-only for now (commands go through REST API)
