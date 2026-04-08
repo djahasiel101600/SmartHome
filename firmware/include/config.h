@@ -3,18 +3,18 @@
 
 // ===== PIN DEFINITIONS =====
 // Relay pins (active LOW - common relay modules)
-#define RELAY_1_PIN D3 // GPIO0
-#define RELAY_2_PIN D5 // GPIO14
-#define RELAY_3_PIN D6 // GPIO12
-#define RELAY_4_PIN D7 // GPIO13
+#define RELAY_1_PIN 16 // GPIO16
+#define RELAY_2_PIN 17 // GPIO17
+#define RELAY_3_PIN 18 // GPIO18
+#define RELAY_4_PIN 19 // GPIO19
 
 // DHT11 sensor pin
-#define DHT_PIN D4 // GPIO2
+#define DHT_PIN 4 // GPIO4
 #define DHT_TYPE DHT11
 
-// OLED Display (I2C)
-#define OLED_SDA D2 // GPIO4
-#define OLED_SCL D1 // GPIO5
+// OLED Display (I2C) — ESP32 default I2C pins
+#define OLED_SDA 21 // GPIO21
+#define OLED_SCL 22 // GPIO22
 
 // ===== SERVER DEFAULTS =====
 // These are used as initial/fallback values.
@@ -43,7 +43,7 @@
 #define WIFI_CHECK_INTERVAL 10000         // Check WiFi status every 10s
 #define WIFI_RECONNECT_TIMEOUT 30000      // Wait 30s for WiFi reconnect before escalating
 #define WIFI_MAX_FAILURES_BEFORE_PORTAL 5 // Re-enter captive portal after N consecutive failures
-#define CONFIG_RESET_PIN D8               // Hold LOW on boot to force captive portal (GPIO15)
+#define CONFIG_RESET_PIN 15               // GPIO15 — hold HIGH on boot to force captive portal
 #define CONFIG_RESET_HOLD_MS 3000         // Hold button for 3s to trigger reset
 
 // ===== DISPLAY =====

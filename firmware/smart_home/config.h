@@ -1,20 +1,17 @@
 // ===== PIN DEFINITIONS =====
 // Relay pins (active LOW - common relay modules)
-#define RELAY_1_PIN D1 // GPIO5
-#define RELAY_2_PIN D2 // GPIO4
-#define RELAY_3_PIN D5 // GPIO14
-#define RELAY_4_PIN D6 // GPIO12
+#define RELAY_1_PIN 16 // GPIO16
+#define RELAY_2_PIN 17 // GPIO17
+#define RELAY_3_PIN 18 // GPIO18
+#define RELAY_4_PIN 19 // GPIO19
 
 // DHT11 sensor pin
-#define DHT_PIN D7 // GPIO13
+#define DHT_PIN 4 // GPIO4
 #define DHT_TYPE DHT11
 
-// OLED Display (I2C)
-// SDA = D3 (GPIO0) - note: some boards use D2
-// SCL = D4 (GPIO2) - note: some boards use D1
-// Adjust if your wiring differs
-#define OLED_SDA D3
-#define OLED_SCL D4
+// OLED Display (I2C) — ESP32 default I2C pins
+#define OLED_SDA 21 // GPIO21
+#define OLED_SCL 22 // GPIO22
 
 // ===== SERVER CONFIGURATION =====
 // The WebSocket server address (your Django backend)

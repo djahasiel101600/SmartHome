@@ -1,8 +1,8 @@
 /*
- * Smart Home Automation - ESP8266 Firmware
+ * Smart Home Automation - ESP32 Firmware
  *
  * Hardware:
- *   - ESP8266 (NodeMCU/Wemos D1 Mini)
+ *   - ESP32 DevKit V1
  *   - 4-Channel Relay Module (active LOW)
  *   - DHT11 Temperature & Humidity Sensor
  *   - SH1106 128x64 OLED Display (I2C)
@@ -16,7 +16,7 @@
  *   - U8g2 by oliver
  */
 
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include <WiFiManager.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>

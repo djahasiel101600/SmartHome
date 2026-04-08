@@ -1,8 +1,8 @@
 /*
- * Smart Home Automation - ESP8266 Firmware
+ * Smart Home Automation - ESP32 Firmware
  *
  * Hardware:
- *   - ESP8266 (NodeMCU/Wemos D1 Mini)
+ *   - ESP32 DevKit V1
  *   - 4-Channel Relay Module (active LOW)
  *   - DHT11 Temperature & Humidity Sensor
  *   - SH1106 128x64 OLED Display (I2C)
@@ -11,14 +11,14 @@
  *   - WiFi auto-reconnect with exponential backoff
  *   - WiFi event-driven disconnect detection
  *   - WebSocket reconnect with exponential backoff
- *   - Hardware watchdog for crash recovery
+ *   - OTA firmware updates via HTTP
  *   - Config reset via button hold on boot
  *   - Captive portal re-entry after repeated WiFi failures
  */
 
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266httpUpdate.h>
+#include <WiFi.h>
+#include <HTTPUpdate.h>
 #include <WiFiManager.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
@@ -94,15 +94,10 @@ void sendDeviceInfo();
 void startWebSocket();
 void stopWebSocket();
 void checkWifiConnection();
-void onWifiConnect(const WiFiEventStationModeGotIP &event);
-void onWifiDisconnect(const WiFiEventStationModeDisconnected &event);
+void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
 bool checkConfigResetButton();
 void startCaptivePortal(bool forcePortal);
 void displayMessage(const char *line1, const char *line2 = nullptr, const char *line3 = nullptr, const char *line4 = nullptr);
-
-// WiFi event handlers (stored to prevent garbage collection)
-WiFiEventHandler wifiConnectHandler;
-WiFiEventHandler wifiDisconnectHandler;
 
 // ===== RELAY CONTROL =====
 void setRelay(int relayNum, bool state)
@@ -257,8 +252,8 @@ void handleOTAUpdate(const char *url, const char *version)
 
     WiFiClient wifiClient;
 
-    ESPhttpUpdate.onProgress([](int progress, int total)
-                             {
+    httpUpdate.onProgress([](int progress, int total)
+                          {
         int pct = (total > 0) ? (progress * 100 / total) : 0;
         otaProgressPercent = pct;
         Serial.printf("OTA progress: %d%%\n", pct);
@@ -271,8 +266,8 @@ void handleOTAUpdate(const char *url, const char *version)
             displayMessage("OTA Update", "Downloading...", progressStr, "Do not power off!");
         } });
 
-    ESPhttpUpdate.rebootOnUpdate(false);
-    t_httpUpdate_return ret = ESPhttpUpdate.update(wifiClient, url);
+    httpUpdate.rebootOnUpdate(false);
+    t_httpUpdate_return ret = httpUpdate.update(wifiClient, url);
 
     switch (ret)
     {
@@ -291,7 +286,7 @@ void handleOTAUpdate(const char *url, const char *version)
 
     case HTTP_UPDATE_FAILED:
     {
-        String errMsg = ESPhttpUpdate.getLastErrorString();
+        String errMsg = httpUpdate.getLastErrorString();
         Serial.printf("OTA failed: %s\n", errMsg.c_str());
         sendOTAResult(false, version, errMsg.c_str());
         displayMessage("OTA Failed!", errMsg.c_str(), "Continuing...");
@@ -438,34 +433,34 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
     }
 }
 
-// ===== WIFI EVENT HANDLERS =====
-void onWifiConnect(const WiFiEventStationModeGotIP &event)
+// ===== WIFI EVENT HANDLER (ESP32) =====
+void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    Serial.printf("WiFi connected — IP: %s\n", WiFi.localIP().toString().c_str());
-    wifiConsecutiveFailures = 0;
-    wifiReconnectDelay = RECONNECT_INTERVAL;
-    connState = CONN_WIFI_CONNECTED;
-    wifiWasConnected = true;
-
-    // Start WebSocket once WiFi is available
-    startWebSocket();
-}
-
-void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
-{
-    Serial.printf("WiFi disconnected — reason: %d\n", event.reason);
-
-    // Stop WebSocket — it can't work without WiFi
-    stopWebSocket();
-
-    connState = CONN_WIFI_DISCONNECTED;
-
-    if (wifiWasConnected)
+    switch (event)
     {
-        // Only track disconnect time if we were previously connected
-        wifiDisconnectedSince = millis();
-        wifiConsecutiveFailures++;
-        Serial.printf("WiFi failure #%d\n", wifiConsecutiveFailures);
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        Serial.printf("WiFi connected — IP: %s\n", WiFi.localIP().toString().c_str());
+        wifiConsecutiveFailures = 0;
+        wifiReconnectDelay = RECONNECT_INTERVAL;
+        connState = CONN_WIFI_CONNECTED;
+        wifiWasConnected = true;
+        startWebSocket();
+        break;
+
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        Serial.printf("WiFi disconnected — reason: %d\n", info.wifi_sta_disconnected.reason);
+        stopWebSocket();
+        connState = CONN_WIFI_DISCONNECTED;
+        if (wifiWasConnected)
+        {
+            wifiDisconnectedSince = millis();
+            wifiConsecutiveFailures++;
+            Serial.printf("WiFi failure #%d\n", wifiConsecutiveFailures);
+        }
+        break;
+
+    default:
+        break;
     }
 }
 
@@ -525,7 +520,7 @@ bool checkConfigResetButton()
 {
     pinMode(CONFIG_RESET_PIN, INPUT);
 
-    // Check if button is held HIGH (D8/GPIO15 has pull-down by default on NodeMCU)
+    // Check if button is held HIGH (GPIO15 with external pull-down)
     if (digitalRead(CONFIG_RESET_PIN) != HIGH)
         return false;
 
@@ -554,7 +549,6 @@ bool checkConfigResetButton()
             return true;
         }
         delay(50);
-        ESP.wdtFeed(); // Keep watchdog happy during wait
     }
 
     Serial.println("Config reset cancelled (button released early)");
@@ -874,10 +868,7 @@ bool configChanged(const char *newHost, const char *newPort, const char *newDevi
 void setup()
 {
     Serial.begin(115200);
-    Serial.println("\n\nSmart Home Automation - Starting...");
-
-    // Enable software watchdog (resets ESP if loop hangs for ~8s)
-    ESP.wdtEnable(WDTO_8S);
+    Serial.println("\n\nSmart Home Automation (ESP32) - Starting...");
 
     // Initialize relay pins (all OFF initially)
     for (int i = 0; i < 4; i++)
@@ -893,12 +884,10 @@ void setup()
     display.begin();
     displayMessage("Smart Home", nullptr, "  Starting...");
 
-    // Mount LittleFS and load saved config
-    if (!LittleFS.begin())
+    // Mount LittleFS and load saved config (true = format on fail)
+    if (!LittleFS.begin(true))
     {
-        Serial.println("LittleFS mount failed — formatting");
-        LittleFS.format();
-        LittleFS.begin();
+        Serial.println("LittleFS mount failed");
     }
     loadConfig();
 
@@ -943,11 +932,9 @@ void setup()
     // NOW that WiFiManager has handed us a working connection,
     // enable auto-reconnect for runtime disconnections
     WiFi.setAutoReconnect(true);
-    WiFi.persistent(true);
 
-    // Register WiFi event handlers for runtime reconnection
-    wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
-    wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
+    // Register WiFi event handler for runtime reconnection
+    WiFi.onEvent(onWifiEvent);
 
     Serial.println("WiFi connected!");
     Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
@@ -981,9 +968,6 @@ void setup()
 // ===== MAIN LOOP =====
 void loop()
 {
-    // Feed the watchdog to prevent reset during normal operation
-    ESP.wdtFeed();
-
     // Process WebSocket messages (only if started)
     if (wsStarted)
     {
