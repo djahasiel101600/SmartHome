@@ -61,8 +61,28 @@ class DeviceRelayCreateView(APIView):
 
 
 class RelayDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Relay.objects.all()
+    queryset = Relay.objects.select_related("device").all()
     serializer_class = RelaySerializer
+
+    def perform_update(self, serializer):
+        relay = serializer.save()
+        # Push updated relay labels to the device
+        device = relay.device
+        relays = list(
+            device.relays.order_by("relay_number").values("relay_number", "label")
+        )
+        channel_layer = get_channel_layer()
+        device_group = f"device_{device.device_id}"
+        async_to_sync(channel_layer.group_send)(
+            device_group,
+            {
+                "type": "send_command",
+                "command": {
+                    "type": "relay_config",
+                    "relays": relays,
+                },
+            },
+        )
 
 
 class RelayDeleteView(APIView):

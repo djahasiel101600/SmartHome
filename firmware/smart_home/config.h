@@ -14,14 +14,16 @@
 #define OLED_SCL 22 // GPIO22
 
 // ===== SERVER CONFIGURATION =====
-// The WebSocket server address (your Django backend)
-// Change these to match your setup
+// NOTE: This file is for the Arduino IDE sketch (smart_home.ino).
+// The PlatformIO build (src/main.cpp + include/config.h) is the
+// active version with auto-discovery and auto-registration.
+// Consider migrating to PlatformIO for the full feature set.
 #define WS_HOST "192.168.1.100"
 #define WS_PORT 8000
 
-// Device ID - must match a device_id UUID in the Django database
+// Device ID - must match a device_id in the Django database
 // Create a device via the API first, then paste its UUID here
-#define DEVICE_ID "PASTE-YOUR-DEVICE-UUID-HERE"
+#define DEVICE_ID "9ac66b4a-484a-4068-8a5a-7c94497566b8"
 
 // ===== TIMING CONFIGURATION =====
 #define SENSOR_READ_INTERVAL 10000   // Read DHT11 every 10 seconds

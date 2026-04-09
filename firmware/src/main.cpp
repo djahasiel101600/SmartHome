@@ -26,6 +26,7 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 #include <LittleFS.h>
+#include <ESPmDNS.h>
 
 #include "config.h"
 
@@ -49,7 +50,10 @@ U8G2_SH1106_128X64_NONAME_F_SW_I2C display(U8G2_R0, OLED_SCL, OLED_SDA, U8X8_PIN
 // ===== USER-CONFIGURABLE SETTINGS (via captive portal) =====
 char cfgWsHost[WS_HOST_LEN] = DEFAULT_WS_HOST;
 char cfgWsPort[WS_PORT_LEN] = DEFAULT_WS_PORT;
-char cfgDeviceId[DEVICE_ID_LEN] = DEFAULT_DEVICE_ID;
+char cfgDeviceId[DEVICE_ID_LEN] = ""; // Auto-generated from MAC on first boot
+
+// ===== RELAY LABELS (synced from server) =====
+char relayLabels[MAX_RELAYS][RELAY_LABEL_LEN] = {"Relay 1", "Relay 2", "Relay 3", "Relay 4"};
 
 // ===== STATE =====
 bool relayStates[4] = {false, false, false, false};
@@ -84,11 +88,12 @@ void setRelay(int relayNum, bool state);
 void readAndSendSensor();
 void sendHeartbeat();
 void handleCommand(JsonDocument &doc);
+void handleRelayConfig(JsonDocument &doc);
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length);
 void updateDisplay();
 void loadConfig();
 void saveConfig();
-bool configChanged(const char *newHost, const char *newPort, const char *newDeviceId);
+bool configChanged(const char *newHost, const char *newPort);
 void handleOTAUpdate(const char *url, const char *version);
 void sendDeviceInfo();
 void startWebSocket();
@@ -98,6 +103,8 @@ void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
 bool checkConfigResetButton();
 void startCaptivePortal(bool forcePortal);
 void displayMessage(const char *line1, const char *line2 = nullptr, const char *line3 = nullptr, const char *line4 = nullptr);
+void generateDeviceId();
+bool discoverServer();
 
 // ===== RELAY CONTROL =====
 void setRelay(int relayNum, bool state)
@@ -186,6 +193,7 @@ void sendDeviceInfo()
     JsonDocument doc;
     doc["type"] = "device_info";
     doc["firmware_version"] = FIRMWARE_VERSION;
+    doc["mac_address"] = WiFi.macAddress();
 
     String payload;
     serializeJson(doc, payload);
@@ -327,6 +335,25 @@ void handleCommand(JsonDocument &doc)
     }
 }
 
+// ===== RELAY CONFIG (labels from server) =====
+void handleRelayConfig(JsonDocument &doc)
+{
+    JsonArray relays = doc["relays"].as<JsonArray>();
+    if (relays.isNull())
+        return;
+
+    for (JsonVariant r : relays)
+    {
+        int num = r["relay_number"] | 0;
+        const char *label = r["label"];
+        if (num >= 1 && num <= MAX_RELAYS && label)
+        {
+            strlcpy(relayLabels[num - 1], label, RELAY_LABEL_LEN);
+            Serial.printf("Relay %d label: \"%s\"\n", num, label);
+        }
+    }
+}
+
 // ===== WEBSOCKET MANAGEMENT =====
 void startWebSocket()
 {
@@ -335,13 +362,16 @@ void startWebSocket()
 
     int port = atoi(cfgWsPort);
     if (port <= 0 || port > 65535)
+    {
+        Serial.printf("[WARN] Invalid port \"%s\", falling back to 8000\n", cfgWsPort);
         port = 8000;
+    }
 
     String wsPath = "/ws/device/";
     wsPath += cfgDeviceId;
     wsPath += "/";
 
-    Serial.printf("WebSocket connecting to %s:%d%s\n", cfgWsHost, port, wsPath.c_str());
+    Serial.printf("WebSocket connecting to ws://%s:%d%s\n", cfgWsHost, port, wsPath.c_str());
 
     webSocket.begin(cfgWsHost, port, wsPath);
     webSocket.onEvent(webSocketEvent);
@@ -370,7 +400,7 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
     switch (type)
     {
     case WStype_DISCONNECTED:
-        Serial.println("WebSocket disconnected");
+        Serial.printf("WebSocket disconnected (WiFi RSSI: %d dBm)\n", WiFi.RSSI());
         wsConnected = false;
         if (connState == CONN_WS_CONNECTED)
         {
@@ -382,7 +412,7 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
         break;
 
     case WStype_CONNECTED:
-        Serial.printf("WebSocket connected to %s\n", (char *)payload);
+        Serial.printf("WebSocket connected to: %s\n", (char *)payload);
         wsConnected = true;
         wsReconnectDelay = RECONNECT_INTERVAL; // Reset backoff
         connState = CONN_WS_CONNECTED;
@@ -417,6 +447,10 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
         if (strcmp(msgType, "command") == 0)
         {
             handleCommand(doc);
+        }
+        else if (strcmp(msgType, "relay_config") == 0)
+        {
+            handleRelayConfig(doc);
         }
         break;
     }
@@ -575,15 +609,13 @@ void displayMessage(const char *line1, const char *line2, const char *line3, con
 // ===== CAPTIVE PORTAL =====
 void startCaptivePortal(bool forcePortal)
 {
-    WiFiManagerParameter paramWsHost("ws_host", "Server IP / Hostname", cfgWsHost, WS_HOST_LEN);
+    WiFiManagerParameter paramWsHost("ws_host", "Server IP (blank = auto-discover)", cfgWsHost, WS_HOST_LEN);
     WiFiManagerParameter paramWsPort("ws_port", "Server Port", cfgWsPort, WS_PORT_LEN);
-    WiFiManagerParameter paramDeviceId("device_id", "Device UUID", cfgDeviceId, DEVICE_ID_LEN);
 
     WiFiManager wifiManager;
 
     wifiManager.addParameter(&paramWsHost);
     wifiManager.addParameter(&paramWsPort);
-    wifiManager.addParameter(&paramDeviceId);
 
     wifiManager.setConfigPortalTimeout(180); // 3 min timeout
     wifiManager.setConnectTimeout(20);       // 20s per connection attempt
@@ -599,13 +631,11 @@ void startCaptivePortal(bool forcePortal)
                                       {
         const char *newHost = paramWsHost.getValue();
         const char *newPort = paramWsPort.getValue();
-        const char *newDeviceId = paramDeviceId.getValue();
 
-        if (configChanged(newHost, newPort, newDeviceId))
+        if (configChanged(newHost, newPort))
         {
             strlcpy(cfgWsHost, newHost, WS_HOST_LEN);
             strlcpy(cfgWsPort, newPort, WS_PORT_LEN);
-            strlcpy(cfgDeviceId, newDeviceId, DEVICE_ID_LEN);
             saveConfig();
         } });
 
@@ -662,13 +692,11 @@ void startCaptivePortal(bool forcePortal)
     // Also read params in case the callback didn't fire (direct auto-connect)
     const char *newHost = paramWsHost.getValue();
     const char *newPort = paramWsPort.getValue();
-    const char *newDeviceId = paramDeviceId.getValue();
 
-    if (configChanged(newHost, newPort, newDeviceId))
+    if (configChanged(newHost, newPort))
     {
         strlcpy(cfgWsHost, newHost, WS_HOST_LEN);
         strlcpy(cfgWsPort, newPort, WS_PORT_LEN);
-        strlcpy(cfgDeviceId, newDeviceId, DEVICE_ID_LEN);
         saveConfig();
     }
 
@@ -751,14 +779,17 @@ void updateDisplay()
     display.drawStr(0, 26, tempStr);
     display.drawStr(0, 37, humStr);
 
-    // Relay states
+    // Relay states — show labels from server
     display.drawHLine(0, 40, 128);
-    display.setFont(u8g2_font_6x10_tr);
+    display.setFont(u8g2_font_5x7_tr);
 
     for (int i = 0; i < 4; i++)
     {
-        char relayStr[12];
-        snprintf(relayStr, sizeof(relayStr), "R%d:%s", i + 1, relayStates[i] ? "ON" : "--");
+        char relayStr[20];
+        // Truncate label to fit in column (max ~5 chars + state)
+        char shortLabel[6];
+        strlcpy(shortLabel, relayLabels[i], sizeof(shortLabel));
+        snprintf(relayStr, sizeof(relayStr), "%s:%s", shortLabel, relayStates[i] ? "ON" : "--");
         display.drawStr(i * 32, 52, relayStr);
     }
 
@@ -832,7 +863,13 @@ void loadConfig()
 
     strlcpy(cfgWsHost, doc["ws_host"] | DEFAULT_WS_HOST, WS_HOST_LEN);
     strlcpy(cfgWsPort, doc["ws_port"] | DEFAULT_WS_PORT, WS_PORT_LEN);
-    strlcpy(cfgDeviceId, doc["device_id"] | DEFAULT_DEVICE_ID, DEVICE_ID_LEN);
+
+    // Device ID is stored in config but auto-generated if missing
+    const char *savedId = doc["device_id"] | "";
+    if (strlen(savedId) > 0)
+    {
+        strlcpy(cfgDeviceId, savedId, DEVICE_ID_LEN);
+    }
 
     Serial.printf("Config loaded — Host: %s  Port: %s  Device: %s\n",
                   cfgWsHost, cfgWsPort, cfgDeviceId);
@@ -857,11 +894,74 @@ void saveConfig()
     Serial.println("Config saved to LittleFS");
 }
 
-bool configChanged(const char *newHost, const char *newPort, const char *newDeviceId)
+bool configChanged(const char *newHost, const char *newPort)
 {
     return strcmp(cfgWsHost, newHost) != 0 ||
-           strcmp(cfgWsPort, newPort) != 0 ||
-           strcmp(cfgDeviceId, newDeviceId) != 0;
+           strcmp(cfgWsPort, newPort) != 0;
+}
+
+// ===== DEVICE ID GENERATION =====
+// Generates a stable device ID from the ESP32's MAC address.
+// Format: "esp32-AABBCCDDEEFF" — deterministic, unique per chip.
+void generateDeviceId()
+{
+    if (strlen(cfgDeviceId) > 0)
+    {
+        Serial.printf("Device ID already set: %s\n", cfgDeviceId);
+        return;
+    }
+
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    snprintf(cfgDeviceId, DEVICE_ID_LEN, "esp32-%02x%02x%02x%02x%02x%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    Serial.printf("Generated device ID from MAC: %s\n", cfgDeviceId);
+    saveConfig();
+}
+
+// ===== mDNS SERVER DISCOVERY =====
+// Queries the local network for a _smarthome._tcp service.
+// Returns true if a server was found and cfgWsHost/cfgWsPort were updated.
+bool discoverServer()
+{
+    // Skip if user manually configured a server address
+    if (strlen(cfgWsHost) > 0)
+    {
+        Serial.printf("Server already configured: %s:%s (skipping mDNS)\n", cfgWsHost, cfgWsPort);
+        return true;
+    }
+
+    Serial.println("Searching for server via mDNS...");
+    displayMessage("Searching...", "Looking for server", "on local network", "via mDNS discovery");
+
+    if (!MDNS.begin("smarthome-device"))
+    {
+        Serial.println("mDNS responder failed to start");
+        return false;
+    }
+
+    int n = MDNS.queryService(MDNS_SERVICE_NAME, MDNS_SERVICE_PROTO);
+    if (n == 0)
+    {
+        Serial.println("No server found via mDNS");
+        displayMessage("No server found!", "Set IP manually:", "Hold GPIO15 3s", "to open portal");
+        MDNS.end();
+        return false;
+    }
+
+    // Use the first discovered server
+    IPAddress serverIp = MDNS.IP(0);
+    uint16_t serverPort = MDNS.port(0);
+
+    serverIp.toString().toCharArray(cfgWsHost, WS_HOST_LEN);
+    snprintf(cfgWsPort, WS_PORT_LEN, "%d", serverPort);
+
+    Serial.printf("Server found via mDNS: %s:%s\n", cfgWsHost, cfgWsPort);
+    saveConfig();
+
+    MDNS.end();
+    return true;
 }
 
 // ===== SETUP =====
@@ -939,7 +1039,26 @@ void setup()
     Serial.println("WiFi connected!");
     Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
     Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
-    Serial.printf("WS target: %s:%s  Device: %s\n", cfgWsHost, cfgWsPort, cfgDeviceId);
+
+    // Generate stable device ID from MAC address (first boot only)
+    generateDeviceId();
+
+    // Discover server via mDNS if not manually configured
+    if (strlen(cfgWsHost) == 0)
+    {
+        if (!discoverServer())
+        {
+            Serial.println("No server found — open captive portal to configure manually");
+            displayMessage(
+                "No server found!",
+                "Hold GPIO15 btn",
+                "for 3 seconds",
+                "to set IP manually");
+            // Don't restart — user can reset to enter portal
+        }
+    }
+
+    Serial.printf("Server: %s:%s  Device: %s\n", cfgWsHost, cfgWsPort, cfgDeviceId);
 
     wifiWasConnected = true;
     connState = CONN_WIFI_CONNECTED;

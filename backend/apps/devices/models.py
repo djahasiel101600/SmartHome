@@ -6,7 +6,10 @@ from django.db import models
 
 class Device(models.Model):
     name = models.CharField(max_length=100, default="My Device")
-    device_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    device_id = models.CharField(
+        max_length=48, unique=True, default=uuid.uuid4,
+        help_text="Unique device identifier. Auto-generated from MAC for ESP32 devices."
+    )
     is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(null=True, blank=True)
     current_firmware_version = models.CharField(max_length=32, default="0.0.0")

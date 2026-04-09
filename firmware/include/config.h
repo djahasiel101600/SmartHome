@@ -1,5 +1,5 @@
 // ===== FIRMWARE VERSION =====
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.1.0"
 
 // ===== PIN DEFINITIONS =====
 // Relay pins (active LOW - common relay modules)
@@ -17,12 +17,10 @@
 #define OLED_SCL 22 // GPIO22
 
 // ===== SERVER DEFAULTS =====
-// These are used as initial/fallback values.
-// Users configure the actual values via the WiFiManager captive portal,
-// which saves them to LittleFS and loads them on every boot.
-#define DEFAULT_WS_HOST "192.168.1.100"
+// Users configure server via captive portal OR mDNS auto-discovery.
+// Device ID is auto-generated from ESP32 MAC address on first boot.
+#define DEFAULT_WS_HOST ""
 #define DEFAULT_WS_PORT "8000"
-#define DEFAULT_DEVICE_ID ""
 
 // Max field lengths (including null terminator)
 #define WS_HOST_LEN 64
@@ -31,6 +29,13 @@
 
 // LittleFS config file path
 #define CONFIG_FILE "/config.json"
+
+// ===== mDNS SERVER DISCOVERY =====
+// The backend advertises itself as _smarthome._tcp on the local network.
+// Firmware queries mDNS on boot to find the server automatically.
+#define MDNS_SERVICE_NAME "_smarthome"
+#define MDNS_SERVICE_PROTO "_tcp"
+#define MDNS_DISCOVERY_TIMEOUT 5000 // Wait up to 5s for mDNS response
 
 // ===== TIMING CONFIGURATION =====
 #define SENSOR_READ_INTERVAL 10000   // Read DHT11 every 10 seconds
@@ -45,6 +50,10 @@
 #define WIFI_MAX_FAILURES_BEFORE_PORTAL 5 // Re-enter captive portal after N consecutive failures
 #define CONFIG_RESET_PIN 15               // GPIO15 — hold HIGH on boot to force captive portal
 #define CONFIG_RESET_HOLD_MS 3000         // Hold button for 3s to trigger reset
+
+// ===== RELAY LABELS =====
+#define MAX_RELAYS 4
+#define RELAY_LABEL_LEN 24
 
 // ===== DISPLAY =====
 #define SCREEN_WIDTH 128

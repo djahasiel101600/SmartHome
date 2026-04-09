@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceConsumer(AsyncJsonWebsocketConsumer):
-    """WebSocket consumer for ESP8266 device communication."""
+    """WebSocket consumer for ESP32 device communication.
+
+    Supports auto-registration: if the device_id in the URL is unknown,
+    a new Device (with 4 relays) is created automatically.
+    """
 
     async def connect(self):
         self.device_id = self.scope["url_route"]["kwargs"]["device_id"]
@@ -23,14 +27,8 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
         self.device = None
 
         try:
-            # Validate device exists
-            self.device = await sync_to_async(
-                Device.objects.get
-            )(device_id=self.device_id)
-        except Device.DoesNotExist:
-            await self.accept()
-            await self.close(code=4001)
-            return
+            # Look up or auto-register the device
+            self.device = await self._get_or_create_device()
         except Exception:
             logger.exception(f"Error looking up device {self.device_id}")
             await self.accept()
@@ -44,6 +42,9 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
 
             # Mark device online
             await self._set_device_online(True)
+
+            # Send relay labels to the device so it can display them
+            await self._send_relay_config()
 
             # Notify dashboard
             await self.channel_layer.group_send(
@@ -239,6 +240,46 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
         Device.objects.filter(device_id=self.device_id).update(
             current_firmware_version=version,
         )
+
+    @sync_to_async
+    def _get_or_create_device(self):
+        """Look up a device by device_id, or auto-register it with 4 relays."""
+        try:
+            return Device.objects.get(device_id=self.device_id)
+        except Device.DoesNotExist:
+            pass
+
+        # Auto-register: create a new device with this ID
+        device = Device(
+            name=f"Auto: {self.device_id[:16]}",
+            device_id=self.device_id,
+        )
+        device.save()
+
+        # Create 4 default relays
+        for i in range(1, 5):
+            Relay.objects.create(device=device, relay_number=i, label=f"Relay {i}")
+
+        logger.info(f"Auto-registered new device: {self.device_id}")
+        return device
+
+    @sync_to_async
+    def _get_relay_config(self):
+        """Return relay labels for the device."""
+        relays = list(
+            self.device.relays.order_by("relay_number").values(
+                "relay_number", "label"
+            )
+        )
+        return relays
+
+    async def _send_relay_config(self):
+        """Send relay labels to the device so it can display them on OLED."""
+        relays = await self._get_relay_config()
+        await self.send_json({
+            "type": "relay_config",
+            "relays": relays,
+        })
 
 
 class DashboardConsumer(AsyncJsonWebsocketConsumer):
