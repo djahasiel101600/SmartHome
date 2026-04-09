@@ -360,6 +360,12 @@ void startWebSocket()
     if (wsStarted)
         return;
 
+    if (strlen(cfgWsHost) == 0)
+    {
+        Serial.println("Cannot start WebSocket: no server host configured");
+        return;
+    }
+
     int port = atoi(cfgWsPort);
     if (port <= 0 || port > 65535)
     {
@@ -1048,13 +1054,33 @@ void setup()
     {
         if (!discoverServer())
         {
-            Serial.println("No server found — open captive portal to configure manually");
+            Serial.println("No server found — opening captive portal for manual config");
             displayMessage(
                 "No server found!",
-                "Hold GPIO15 btn",
-                "for 3 seconds",
-                "to set IP manually");
-            // Don't restart — user can reset to enter portal
+                "Opening setup...",
+                "Enter server IP",
+                "in the portal");
+            delay(2000);
+            startCaptivePortal(true);
+
+            // If portal closed and still no host, retry mDNS once more
+            if (strlen(cfgWsHost) == 0)
+            {
+                discoverServer();
+            }
+
+            // If STILL no host, restart and try again
+            if (strlen(cfgWsHost) == 0)
+            {
+                Serial.println("Still no server configured — restarting");
+                displayMessage(
+                    "No server set!",
+                    "Restarting...",
+                    "Will retry mDNS",
+                    "on next boot");
+                delay(3000);
+                ESP.restart();
+            }
         }
     }
 
