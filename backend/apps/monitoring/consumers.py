@@ -297,6 +297,24 @@ class DashboardConsumer(AsyncJsonWebsocketConsumer):
         await self.accept()
         logger.info(f"Dashboard client connected: {self.user.username}")
 
+        # Send current online status of every device so the frontend
+        # doesn't have to rely on receiving a live device_status broadcast.
+        await self._send_all_device_statuses()
+
+    @sync_to_async
+    def _get_all_device_statuses(self):
+        return list(
+            Device.objects.values_list("device_id", "is_online")
+        )
+
+    async def _send_all_device_statuses(self):
+        statuses = await self._get_all_device_statuses()
+        for device_id, is_online in statuses:
+            await self.send_json({
+                "type": "device_status",
+                "data": {"device_id": str(device_id), "is_online": is_online},
+            })
+
     async def disconnect(self, close_code):
         try:
             async with asyncio.timeout(5):
