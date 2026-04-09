@@ -1,4 +1,4 @@
-const backendPort = "8000";
+const backendPort = "8080";
 
 export const config = {
   apiBaseUrl:

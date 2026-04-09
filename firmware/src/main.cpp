@@ -719,122 +719,184 @@ void startCaptivePortal(bool forcePortal)
     }
 }
 
+// ===== CUSTOM ICONS (8x8 XBM bitmaps) =====
+// Thermometer icon
+static const uint8_t icon_temp[] = {0x0C, 0x12, 0x12, 0x12, 0x12, 0x3E, 0x3E, 0x1C};
+// Water droplet icon
+static const uint8_t icon_drop[] = {0x08, 0x08, 0x14, 0x22, 0x41, 0x41, 0x22, 0x1C};
+// Power plug / connected icon
+static const uint8_t icon_plug[] = {0x00, 0x24, 0x24, 0x7E, 0x7E, 0x3C, 0x18, 0x18};
+// WiFi icon (3 arcs)
+static const uint8_t icon_wifi[] = {0x00, 0x3C, 0x42, 0x18, 0x24, 0x00, 0x08, 0x00};
+// No WiFi / X
+static const uint8_t icon_nowifi[] = {0x00, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x00};
+// Cloud connected
+static const uint8_t icon_cloud[] = {0x0C, 0x12, 0x71, 0x81, 0x81, 0x81, 0x7E, 0x00};
+// Lightning bolt (relay ON)
+static const uint8_t icon_bolt[] = {0x10, 0x30, 0x7C, 0x18, 0x3E, 0x0C, 0x08, 0x00};
+// Circle-dot (relay OFF)
+static const uint8_t icon_circle[] = {0x1C, 0x22, 0x41, 0x41, 0x41, 0x22, 0x1C, 0x00};
+// Signal strength bars
+static const uint8_t icon_sig1[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x40};
+static const uint8_t icon_sig2[] = {0x00, 0x00, 0x00, 0x00, 0x20, 0x20, 0x60, 0x60};
+static const uint8_t icon_sig3[] = {0x00, 0x00, 0x10, 0x10, 0x30, 0x30, 0x70, 0x70};
+static const uint8_t icon_sig4[] = {0x08, 0x08, 0x18, 0x18, 0x38, 0x38, 0x78, 0x78};
+// Home icon
+static const uint8_t icon_home[] = {0x08, 0x14, 0x22, 0x41, 0x7F, 0x41, 0x41, 0x7F};
+
 // ===== OLED DISPLAY =====
 void updateDisplay()
 {
     display.clearBuffer();
 
-    // Title bar
+    // ── Title bar ──
+    display.drawXBM(0, 1, 8, 8, icon_home);
     display.setFont(u8g2_font_6x10_tr);
-    display.drawStr(0, 10, "Smart Home");
+    display.drawStr(11, 9, "SmartHome");
 
-    // Connection status indicator (right side of title bar)
+    // Connection status icon + label (right side)
     switch (connState)
     {
     case CONN_WS_CONNECTED:
-        display.drawStr(76, 10, "ONLINE");
+        display.drawXBM(96, 1, 8, 8, icon_cloud);
+        display.setFont(u8g2_font_5x7_tr);
+        display.drawStr(106, 8, "OK");
         break;
     case CONN_WS_CONNECTING:
     {
-        unsigned long d = (millis() / 400) % 4;
-        const char *wsAnim[] = {"WS   ", "WS.  ", "WS.. ", "WS..."};
-        display.drawStr(76, 10, wsAnim[d]);
+        unsigned long d = (millis() / 500) % 2;
+        display.drawXBM(96, 1, 8, 8, icon_cloud);
+        display.setFont(u8g2_font_5x7_tr);
+        display.drawStr(106, 8, d ? ".." : "  ");
         break;
     }
     case CONN_WIFI_CONNECTED:
-        display.drawStr(76, 10, "WiFi");
+        display.drawXBM(96, 1, 8, 8, icon_wifi);
+        display.setFont(u8g2_font_5x7_tr);
+        display.drawStr(106, 8, "WF");
         break;
     case CONN_WIFI_CONNECTING:
     {
-        unsigned long d = (millis() / 400) % 4;
-        const char *wfAnim[] = {"CONN ", "CONN.", "CONN.", "CONN."};
-        display.drawStr(76, 10, wfAnim[d]);
+        unsigned long d = (millis() / 500) % 2;
+        display.drawXBM(96, 1, 8, 8, icon_wifi);
+        display.setFont(u8g2_font_5x7_tr);
+        display.drawStr(106, 8, d ? ".." : "  ");
         break;
     }
     case CONN_WIFI_DISCONNECTED:
-        display.drawStr(76, 10, "OFFL");
+        display.drawXBM(96, 1, 8, 8, icon_nowifi);
+        display.setFont(u8g2_font_5x7_tr);
+        display.drawStr(106, 8, "OFF");
         break;
     }
 
-    // Divider line
-    display.drawHLine(0, 13, 128);
+    display.drawHLine(0, 12, 128);
 
-    // Temperature & Humidity
-    display.setFont(u8g2_font_6x10_tr);
-    char tempStr[20];
-    char humStr[20];
+    // ── Sensor row (icon + large value) ──
+    display.drawXBM(0, 15, 8, 8, icon_temp);
+    display.drawXBM(64, 15, 8, 8, icon_drop);
 
+    display.setFont(u8g2_font_7x13B_tr);
     if (!isnan(lastTemperature))
     {
-        snprintf(tempStr, sizeof(tempStr), "Temp: %.1fC", lastTemperature);
+        char tv[10];
+        snprintf(tv, sizeof(tv), "%.1fC", lastTemperature);
+        display.drawStr(10, 24, tv);
     }
     else
     {
-        snprintf(tempStr, sizeof(tempStr), "Temp: --");
+        display.drawStr(10, 24, "--.-");
     }
 
     if (!isnan(lastHumidity))
     {
-        snprintf(humStr, sizeof(humStr), "Hum:  %.1f%%", lastHumidity);
+        char hv[10];
+        snprintf(hv, sizeof(hv), "%.0f%%", lastHumidity);
+        display.drawStr(74, 24, hv);
     }
     else
     {
-        snprintf(humStr, sizeof(humStr), "Hum:  --");
+        display.drawStr(74, 24, "--%");
     }
 
-    display.drawStr(0, 26, tempStr);
-    display.drawStr(0, 37, humStr);
+    display.drawHLine(0, 27, 128);
 
-    // Relay states — show labels from server
-    display.drawHLine(0, 40, 128);
+    // ── Relay row (icon per relay, 4 columns) ──
     display.setFont(u8g2_font_5x7_tr);
-
     for (int i = 0; i < 4; i++)
     {
-        char relayStr[20];
-        // Truncate label to fit in column (max ~5 chars + state)
-        char shortLabel[6];
-        strlcpy(shortLabel, relayLabels[i], sizeof(shortLabel));
-        snprintf(relayStr, sizeof(relayStr), "%s:%s", shortLabel, relayStates[i] ? "ON" : "--");
-        display.drawStr(i * 32, 52, relayStr);
+        int x = i * 32;
+        // Draw bolt (ON) or circle (OFF) icon
+        display.drawXBM(x + 2, 30, 8, 8, relayStates[i] ? icon_bolt : icon_circle);
+
+        // Truncated label below icon
+        char lbl[6];
+        strlcpy(lbl, relayLabels[i], sizeof(lbl));
+        display.drawStr(x + 12, 37, lbl);
     }
 
-    // Bottom bar: contextual info
+    display.drawHLine(0, 40, 128);
+
+    // ── Bottom status bar ──
     display.setFont(u8g2_font_5x7_tr);
     if (WiFi.status() == WL_CONNECTED)
     {
-        display.drawStr(0, 63, WiFi.localIP().toString().c_str());
+        // IP address
+        display.drawStr(0, 50, WiFi.localIP().toString().c_str());
 
-        // Show RSSI as signal bar icon + dBm
+        // Signal strength icon
         int rssi = WiFi.RSSI();
-        char rssiStr[16];
+        const uint8_t *sigIcon;
         if (rssi > -50)
-            snprintf(rssiStr, sizeof(rssiStr), "Sig:|||| %d", rssi);
+            sigIcon = icon_sig4;
         else if (rssi > -60)
-            snprintf(rssiStr, sizeof(rssiStr), "Sig:||| %d", rssi);
+            sigIcon = icon_sig3;
         else if (rssi > -70)
-            snprintf(rssiStr, sizeof(rssiStr), "Sig:|| %d", rssi);
+            sigIcon = icon_sig2;
         else
-            snprintf(rssiStr, sizeof(rssiStr), "Sig:| %d", rssi);
-        display.drawStr(73, 63, rssiStr);
+            sigIcon = icon_sig1;
+        display.drawXBM(100, 43, 8, 8, sigIcon);
+
+        // dBm value
+        char rssiStr[8];
+        snprintf(rssiStr, sizeof(rssiStr), "%ddB", rssi);
+        display.drawStr(110, 50, rssiStr);
+
+        // Device ID (bottom row, truncated)
+        if (strlen(cfgDeviceId) > 0)
+        {
+            char idStr[22];
+            snprintf(idStr, sizeof(idStr), "ID:%s", cfgDeviceId);
+            display.drawStr(0, 62, idStr);
+        }
+
+        // Server address (bottom right)
+        if (strlen(cfgWsHost) > 0)
+        {
+            char srvStr[24];
+            snprintf(srvStr, sizeof(srvStr), "%s:%s", cfgWsHost, cfgWsPort);
+            // Right-align: measure width
+            int w = display.getStrWidth(srvStr);
+            display.drawStr(128 - w, 62, srvStr);
+        }
     }
     else
     {
-        // Show actionable message instead of just "No WiFi"
+        display.drawXBM(0, 43, 8, 8, icon_nowifi);
         if (wifiConsecutiveFailures >= WIFI_MAX_FAILURES_BEFORE_PORTAL - 1)
         {
-            display.drawStr(0, 63, "Opening portal soon..");
+            display.drawStr(10, 50, "Portal opening..");
         }
         else if (wifiConsecutiveFailures > 0)
         {
-            char retryStr[28];
-            snprintf(retryStr, sizeof(retryStr), "Reconnecting.. (%d/%d)",
+            char retryStr[24];
+            snprintf(retryStr, sizeof(retryStr), "Retry %d/%d",
                      wifiConsecutiveFailures, WIFI_MAX_FAILURES_BEFORE_PORTAL);
-            display.drawStr(0, 63, retryStr);
+            display.drawStr(10, 50, retryStr);
         }
         else
         {
-            display.drawStr(0, 63, "WiFi disconnected");
+            display.drawStr(10, 50, "Disconnected");
         }
     }
 

@@ -26,8 +26,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--port",
             type=int,
-            default=8000,
-            help="Port to advertise (default: 8000)",
+            default=8080,
+            help="Port to advertise (default: 8080)",
         )
 
     def handle(self, *args, **options):

@@ -20,7 +20,7 @@
 // Users configure server via captive portal OR mDNS auto-discovery.
 // Device ID is auto-generated from ESP32 MAC address on first boot.
 #define DEFAULT_WS_HOST ""
-#define DEFAULT_WS_PORT "8000"
+#define DEFAULT_WS_PORT "8080"
 
 // Max field lengths (including null terminator)
 #define WS_HOST_LEN 64
