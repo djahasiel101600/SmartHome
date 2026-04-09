@@ -749,156 +749,159 @@ void updateDisplay()
 {
     display.clearBuffer();
 
-    // ── Title bar ──
-    display.drawXBM(0, 1, 8, 8, icon_home);
+    // ── Top bar: title + connection icon ──
     display.setFont(u8g2_font_6x10_tr);
-    display.drawStr(11, 9, "SmartHome");
+    display.drawXBM(0, 0, 8, 8, icon_home);
+    display.drawStr(11, 8, "SmartHome");
 
-    // Connection status icon + label (right side)
+    // Connection status (top-right)
     switch (connState)
     {
     case CONN_WS_CONNECTED:
-        display.drawXBM(96, 1, 8, 8, icon_cloud);
+        display.drawXBM(92, 0, 8, 8, icon_cloud);
         display.setFont(u8g2_font_5x7_tr);
-        display.drawStr(106, 8, "OK");
+        display.drawStr(102, 7, "LIVE");
         break;
     case CONN_WS_CONNECTING:
+    case CONN_WIFI_CONNECTED:
     {
-        unsigned long d = (millis() / 500) % 2;
-        display.drawXBM(96, 1, 8, 8, icon_cloud);
+        display.drawXBM(92, 0, 8, 8, icon_wifi);
         display.setFont(u8g2_font_5x7_tr);
-        display.drawStr(106, 8, d ? ".." : "  ");
+        unsigned long d = (millis() / 500) % 2;
+        display.drawStr(102, 7, connState == CONN_WS_CONNECTING ? (d ? ".." : "  ") : "OK");
         break;
     }
-    case CONN_WIFI_CONNECTED:
-        display.drawXBM(96, 1, 8, 8, icon_wifi);
-        display.setFont(u8g2_font_5x7_tr);
-        display.drawStr(106, 8, "WF");
-        break;
     case CONN_WIFI_CONNECTING:
     {
-        unsigned long d = (millis() / 500) % 2;
-        display.drawXBM(96, 1, 8, 8, icon_wifi);
+        display.drawXBM(92, 0, 8, 8, icon_wifi);
         display.setFont(u8g2_font_5x7_tr);
-        display.drawStr(106, 8, d ? ".." : "  ");
+        unsigned long d2 = (millis() / 500) % 2;
+        display.drawStr(102, 7, d2 ? ".." : "  ");
         break;
     }
     case CONN_WIFI_DISCONNECTED:
-        display.drawXBM(96, 1, 8, 8, icon_nowifi);
+        display.drawXBM(92, 0, 8, 8, icon_nowifi);
         display.setFont(u8g2_font_5x7_tr);
-        display.drawStr(106, 8, "OFF");
+        display.drawStr(102, 7, "OFF");
         break;
     }
 
-    display.drawHLine(0, 12, 128);
+    display.drawHLine(0, 11, 128);
 
-    // ── Sensor row (icon + large value) ──
-    display.drawXBM(0, 15, 8, 8, icon_temp);
-    display.drawXBM(64, 15, 8, 8, icon_drop);
-
-    display.setFont(u8g2_font_7x13B_tr);
+    // ── Temperature (large, centered) ──
+    display.drawXBM(4, 16, 8, 8, icon_temp);
+    display.setFont(u8g2_font_logisoso16_tn); // big numeric font
     if (!isnan(lastTemperature))
     {
         char tv[10];
-        snprintf(tv, sizeof(tv), "%.1fC", lastTemperature);
-        display.drawStr(10, 24, tv);
+        snprintf(tv, sizeof(tv), "%.1f", lastTemperature);
+        display.drawStr(16, 30, tv);
     }
     else
     {
-        display.drawStr(10, 24, "--.-");
+        display.setFont(u8g2_font_7x13B_tr);
+        display.drawStr(16, 28, "--.-");
     }
+    // Unit
+    display.setFont(u8g2_font_6x10_tr);
+    display.drawStr(56, 18, "o");
+    display.drawStr(61, 30, "C");
 
+    // ── Humidity (large, right half) ──
+    display.drawXBM(72, 16, 8, 8, icon_drop);
+    display.setFont(u8g2_font_logisoso16_tn);
     if (!isnan(lastHumidity))
     {
         char hv[10];
-        snprintf(hv, sizeof(hv), "%.0f%%", lastHumidity);
-        display.drawStr(74, 24, hv);
+        snprintf(hv, sizeof(hv), "%.0f", lastHumidity);
+        display.drawStr(84, 30, hv);
     }
     else
     {
-        display.drawStr(74, 24, "--%");
+        display.setFont(u8g2_font_7x13B_tr);
+        display.drawStr(84, 28, "--");
     }
+    display.setFont(u8g2_font_6x10_tr);
+    display.drawStr(112, 30, "%");
 
-    display.drawHLine(0, 27, 128);
+    display.drawHLine(0, 35, 128);
 
-    // ── Relay row (icon per relay, 4 columns) ──
-    display.setFont(u8g2_font_5x7_tr);
-    for (int i = 0; i < 4; i++)
-    {
-        int x = i * 32;
-        // Draw bolt (ON) or circle (OFF) icon
-        display.drawXBM(x + 2, 30, 8, 8, relayStates[i] ? icon_bolt : icon_circle);
-
-        // Truncated label below icon
-        char lbl[6];
-        strlcpy(lbl, relayLabels[i], sizeof(lbl));
-        display.drawStr(x + 12, 37, lbl);
-    }
-
-    display.drawHLine(0, 40, 128);
-
-    // ── Bottom status bar ──
+    // ── Signal & IP bar ──
     display.setFont(u8g2_font_5x7_tr);
     if (WiFi.status() == WL_CONNECTED)
     {
-        // IP address
-        display.drawStr(0, 50, WiFi.localIP().toString().c_str());
-
-        // Signal strength icon
         int rssi = WiFi.RSSI();
+
+        // Signal bars icon
         const uint8_t *sigIcon;
+        const char *sigLabel;
         if (rssi > -50)
-            sigIcon = icon_sig4;
-        else if (rssi > -60)
-            sigIcon = icon_sig3;
-        else if (rssi > -70)
-            sigIcon = icon_sig2;
-        else
-            sigIcon = icon_sig1;
-        display.drawXBM(100, 43, 8, 8, sigIcon);
-
-        // dBm value
-        char rssiStr[8];
-        snprintf(rssiStr, sizeof(rssiStr), "%ddB", rssi);
-        display.drawStr(110, 50, rssiStr);
-
-        // Device ID (bottom row, truncated)
-        if (strlen(cfgDeviceId) > 0)
         {
-            char idStr[22];
-            snprintf(idStr, sizeof(idStr), "ID:%s", cfgDeviceId);
-            display.drawStr(0, 62, idStr);
+            sigIcon = icon_sig4;
+            sigLabel = "Strong";
+        }
+        else if (rssi > -60)
+        {
+            sigIcon = icon_sig3;
+            sigLabel = "Good";
+        }
+        else if (rssi > -70)
+        {
+            sigIcon = icon_sig2;
+            sigLabel = "Fair";
+        }
+        else
+        {
+            sigIcon = icon_sig1;
+            sigLabel = "Weak";
         }
 
-        // Server address (bottom right)
-        if (strlen(cfgWsHost) > 0)
+        display.drawXBM(0, 38, 8, 8, sigIcon);
+        char rssiStr[16];
+        snprintf(rssiStr, sizeof(rssiStr), "%s %ddBm", sigLabel, rssi);
+        display.drawStr(10, 45, rssiStr);
+
+        // IP address row
+        display.drawStr(0, 55, WiFi.localIP().toString().c_str());
+
+        // Device ID (bottom right, truncated)
+        if (strlen(cfgDeviceId) > 0)
         {
-            char srvStr[24];
-            snprintf(srvStr, sizeof(srvStr), "%s:%s", cfgWsHost, cfgWsPort);
-            // Right-align: measure width
-            int w = display.getStrWidth(srvStr);
-            display.drawStr(128 - w, 62, srvStr);
+            // Show last 12 chars of device ID to fit
+            const char *id = cfgDeviceId;
+            int len = strlen(id);
+            if (len > 12)
+                id = id + (len - 12);
+            int w = display.getStrWidth(id);
+            display.drawStr(128 - w, 55, id);
         }
     }
     else
     {
-        display.drawXBM(0, 43, 8, 8, icon_nowifi);
+        display.drawXBM(0, 38, 8, 8, icon_nowifi);
         if (wifiConsecutiveFailures >= WIFI_MAX_FAILURES_BEFORE_PORTAL - 1)
         {
-            display.drawStr(10, 50, "Portal opening..");
+            display.drawStr(10, 45, "Portal opening..");
         }
         else if (wifiConsecutiveFailures > 0)
         {
             char retryStr[24];
             snprintf(retryStr, sizeof(retryStr), "Retry %d/%d",
                      wifiConsecutiveFailures, WIFI_MAX_FAILURES_BEFORE_PORTAL);
-            display.drawStr(10, 50, retryStr);
+            display.drawStr(10, 45, retryStr);
         }
         else
         {
-            display.drawStr(10, 50, "Disconnected");
+            display.drawStr(10, 45, "Disconnected");
         }
     }
+
+    // ── Firmware version (bottom-right corner) ──
+    display.setFont(u8g2_font_4x6_tr);
+    char verStr[12];
+    snprintf(verStr, sizeof(verStr), "v%s", FIRMWARE_VERSION);
+    int vw = display.getStrWidth(verStr);
+    display.drawStr(128 - vw, 63, verStr);
 
     display.sendBuffer();
 }
@@ -1036,7 +1039,7 @@ bool discoverServer()
 void setup()
 {
     Serial.begin(115200);
-    Serial.println("\n\nSmart Home Automation (ESP32) - Starting...");
+    Serial.println("\n\nDevice Initializing");
 
     // Initialize relay pins (all OFF initially)
     for (int i = 0; i < 4; i++)
