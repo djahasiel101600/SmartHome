@@ -14,6 +14,33 @@ from .services import check_thresholds, generate_insight, is_cached
 
 logger = logging.getLogger(__name__)
 
+# How long without a heartbeat before we mark a device offline (seconds).
+STALE_DEVICE_TIMEOUT = 90
+
+
+@shared_task
+def check_stale_devices():
+    """Mark devices offline if their last_seen exceeds the heartbeat timeout."""
+    cutoff = timezone.now() - timedelta(seconds=STALE_DEVICE_TIMEOUT)
+    stale = Device.objects.filter(is_online=True, last_seen__lt=cutoff)
+    stale_ids = list(stale.values_list("device_id", flat=True))
+
+    if not stale_ids:
+        return
+
+    stale.update(is_online=False)
+
+    channel_layer = get_channel_layer()
+    for device_id in stale_ids:
+        async_to_sync(channel_layer.group_send)(
+            "dashboard",
+            {
+                "type": "device_status",
+                "data": {"device_id": str(device_id), "is_online": False},
+            },
+        )
+        logger.info(f"Marked stale device {device_id} as offline")
+
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=10)
 def generate_sensor_insight(self, device_id: str, temperature: float, humidity: float):

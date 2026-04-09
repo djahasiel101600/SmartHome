@@ -195,6 +195,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.monitoring.tasks.prune_old_readings",
         "schedule": crontab(hour=1, minute=0),  # daily at 01:00
     },
+    "check-stale-devices": {
+        "task": "apps.monitoring.tasks.check_stale_devices",
+        "schedule": 30.0,  # every 30 seconds
+    },
 }
 
 # OpenAI
