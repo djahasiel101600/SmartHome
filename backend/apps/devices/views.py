@@ -1,3 +1,4 @@
+import os
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import models
@@ -19,6 +20,17 @@ from .serializers import (
     RelayToggleSerializer,
     TriggerOTASerializer,
 )
+
+def _get_lan_ip():
+    """Get this machines' LAN IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80)) # do data sent
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
@@ -201,7 +213,10 @@ class DeviceOTAUpdateView(APIView):
         except FirmwareVersion.DoesNotExist:
             return Response({"detail": "Firmware version not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        download_url = request.build_absolute_uri(f"/api/firmware/{fw.pk}/download/")
+        # download_url = request.build_absolute_uri(f"/api/firmware/{fw.pk}/download/")
+        backend_host = os.environ.get("BACKEND_HOST") or _get_lan_ip()
+        backend_port = os.environ.get("BACKEND_PORT") or request.META.get("SERVER_PORT", "8080")
+        download_url = f"http://{backend_host}:{backend_port}/api/firmware/{fw.pk}/download/"
 
         channel_layer = get_channel_layer()
         device_group = f"device_{device.device_id}"
