@@ -41,19 +41,20 @@ class SensorLatestView(APIView):
         return Response(SensorReadingSerializer(reading).data)
 
 
+class LargeResultsPagination(PageNumberPagination):
+    page_size = 2000
+    max_page_size = 10000
+
+
 class SensorHistoryView(generics.ListAPIView):
     serializer_class = SensorReadingSerializer
+    pagination_class = LargeResultsPagination
 
     def get_queryset(self):
         time_range = self.request.query_params.get("range", "24h")
         delta = RANGE_MAP.get(time_range, RANGE_MAP["24h"])
         since = timezone.now() - delta
         return SensorReading.objects.filter(recorded_at__gte=since)
-
-
-class LargeResultsPagination(PageNumberPagination):
-    page_size = 2000
-    max_page_size = 10000
 
 
 class SensorAggregateHistoryView(generics.ListAPIView):
