@@ -4,9 +4,9 @@ from .views import health_check
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("health/", health_check),
     path("api/auth/", include("apps.accounts.urls")),
     path("api/", include("apps.devices.urls")),
     path("api/", include("apps.schedules.urls")),
     path("api/", include("apps.monitoring.urls")),
-    path('healthcheck/', health_check)
 ]
