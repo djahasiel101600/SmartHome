@@ -31,7 +31,7 @@ services:
     env_file:
       - .env
     environment:
-      - RUN_MIGRATIONS: "false"
+      RUN_MIGRATIONS: "false"
     depends_on:
       - smarthome-backend
     restart: unless-stopped
@@ -53,7 +53,7 @@ services:
     env_file:
       - .env
     environment:
-      - RUN_MIGRATIONS: "false"
+      RUN_MIGRATIONS: "false"
     depends_on:
       - smarthome-backend
     restart: unless-stopped
