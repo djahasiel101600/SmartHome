@@ -8,5 +8,5 @@ urlpatterns = [
     path("api/", include("apps.devices.urls")),
     path("api/", include("apps.schedules.urls")),
     path("api/", include("apps.monitoring.urls")),
-    path('health/', health_check)
+    path('healthcheck/', health_check)
 ]
