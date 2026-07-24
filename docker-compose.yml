@@ -71,6 +71,8 @@ services:
     build: ./frontend
     depends_on:
       - smarthome-backend
+    expose:
+      - 5173
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost"]
