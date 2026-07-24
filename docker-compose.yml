@@ -1,79 +1,93 @@
 services:
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-  backend:
+  
+  smarthome-backend:
+    container_name: smarthome-backend
     build: ./backend
-    ports:
-      - "8001:8000"
     volumes:
-      - sqlite_data:/app/data
-    environment:
-      - DJANGO_SECRET_KEY=docker-dev-secret-change-in-production
-      - DJANGO_DEBUG=True
-      - DJANGO_ALLOWED_HOSTS=*
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - CORS_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1,http://localhost:80,http://localhost:8080
-      - CACHE_REDIS_URL=redis://redis:6379/2
-      - DATABASE_PATH=/app/data/db.sqlite3
-      - TZ=Asia/Manila
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    depends_on:
-      - redis
+      - smarthome-sqlite_data:/app/data
+    env_file:
+      - .env
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+      - jdp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  celery-worker:
+  smarthome-celery-worker:
+    container_name: smarthome-celery-worker
     build: ./backend
     command: celery -A config worker --loglevel=info
     volumes:
-      - sqlite_data:/app/data
-    environment:
-      - DJANGO_SECRET_KEY=docker-dev-secret-change-in-production
-      - DJANGO_DEBUG=True
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - CACHE_REDIS_URL=redis://redis:6379/2
-      - DATABASE_PATH=/app/data/db.sqlite3
-      - TZ=Asia/Manila
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - smarthome-sqlite_data:/app/data
+    env_file:
+      - .env
     depends_on:
-      - redis
-      - backend
+      - smarthome-backend
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+      - jdp-network
 
-  celery-beat:
+  smarthome-celery-beat:
+    container_name: smarthome-celery-beat
     build: ./backend
     command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
-      - sqlite_data:/app/data
-    environment:
-      - DJANGO_SECRET_KEY=docker-dev-secret-change-in-production
-      - DJANGO_DEBUG=True
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - CACHE_REDIS_URL=redis://redis:6379/2
-      - DATABASE_PATH=/app/data/db.sqlite3
-      - TZ=Asia/Manila
+      - smarthome-sqlite_data:/app/data
+    env_file:
+      - .env
     depends_on:
-      - redis
-      - backend
+      - smarthome-backend
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+      - jdp-network
 
-  frontend:
+  smarthome-frontend:
+    container_name: smarthome-frontend
     build: ./frontend
-    ports:
-      - "8080:80"
     depends_on:
-      - backend
+      - smarthome-backend
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+      - jdp-network
+  
+  
 
 volumes:
-  redis_data:
-  sqlite_data:
+  smarthome-sqlite_data:
+
+networks:
+  jdp-network:
+    external: true
